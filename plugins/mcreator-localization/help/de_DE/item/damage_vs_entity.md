@@ -1,0 +1,1 @@
+Dieser Parameter bestimmt, wie viel Angriffsschaden dein Gegenstand gegen Objekte anrichten wird.

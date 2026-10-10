@@ -1,0 +1,1 @@
+This parameter determines how much attack damage your item will deal against entities.

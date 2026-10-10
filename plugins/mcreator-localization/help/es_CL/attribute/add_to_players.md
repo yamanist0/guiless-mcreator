@@ -1,0 +1,1 @@
+Si está habilitado, todos los jugadores en el mundo tendrán este atributo presente y configurado como su valor por defecto cuando se unan al mundo.

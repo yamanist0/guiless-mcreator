@@ -1,0 +1,1 @@
+Ez a beállítás a dimenziót átlátszóvá teszi

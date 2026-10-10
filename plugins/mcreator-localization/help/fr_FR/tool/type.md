@@ -1,0 +1,1 @@
+Le type d'outil de cet outil.

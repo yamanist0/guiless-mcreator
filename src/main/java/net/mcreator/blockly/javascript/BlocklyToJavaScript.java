@@ -1,0 +1,89 @@
+/*
+ * MCreator (https://mcreator.net/)
+ * Copyright (C) 2012-2020, Pylo
+ * Copyright (C) 2020-2026, Pylo, opensource contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package net.mcreator.blockly.javascript;
+
+import net.mcreator.blockly.*;
+import net.mcreator.generator.template.TemplateGenerator;
+import net.mcreator.generator.template.TemplateGeneratorException;
+import net.mcreator.blockly.BlocklyEditorType;
+import net.mcreator.init.L10N;
+import net.mcreator.util.XMLUtil;
+import net.mcreator.workspace.Workspace;
+import net.mcreator.workspace.elements.ModElement;
+import net.mcreator.workspace.elements.VariableElement;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+
+import java.util.List;
+
+public class BlocklyToJavaScript extends BlocklyToCode {
+
+	protected BlocklyVariables variableGenerator;
+
+	private String externalTrigger;
+	private List<VariableElement> variables;
+
+	/**
+	 * @param workspace         <p>The {@link Workspace} executing the code</p>
+	 * @param sourceXML         <p>The XML code used by Blockly</p>
+	 * @param templateGenerator <p>The folder location in each {@link net.mcreator.generator.Generator} containing the code template files<p>
+	 */
+	public BlocklyToJavaScript(Workspace workspace, ModElement parent, String sourceXML,
+			TemplateGenerator templateGenerator, IBlockGenerator... externalGenerators)
+			throws TemplateGeneratorException {
+		super(workspace, parent, BlocklyEditorType.SCRIPT, sourceXML, templateGenerator, externalGenerators);
+	}
+
+	@Override protected void preBlocksPlacement(Document doc, Element startBlock) {
+		if (doc != null) {
+			// first we load data from the start block
+			Element trigger = XMLUtil.getFirstChildrenWithName(
+					BlocklyBlockUtil.getStartBlock(doc, getEditorType().startBlockName()), "field");
+			if (trigger != null && !trigger.getTextContent().equals("no_ext_trigger")) {
+				externalTrigger = trigger.getTextContent();
+			} else {
+				addCompileNote(new BlocklyCompileNote(BlocklyCompileNote.Type.ERROR,
+						L10N.t("blockly.errors.scripts.missing_trigger")));
+			}
+
+			// then we add custom local variables
+			Element variables = XMLUtil.getFirstChildrenWithName(doc.getDocumentElement(), "variables");
+			this.variables = variableGenerator.processLocalVariables(variables);
+		}
+	}
+
+	public String getExternalTrigger() {
+		return externalTrigger;
+	}
+
+	/**
+	 * <p>This method is executed after the constructor is called, before the code is generated</p>
+	 */
+	@Override protected void beforeGenerate() {
+		super.beforeGenerate();
+
+		variableGenerator = new BlocklyVariables(this);
+	}
+
+	public List<VariableElement> getLocalVariables() {
+		return variables;
+	}
+
+}

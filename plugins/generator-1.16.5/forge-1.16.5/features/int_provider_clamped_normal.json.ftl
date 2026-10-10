@@ -1,0 +1,1 @@
+((int) MathHelper.clamp(${field$mean} + (float) ${JavaModName}Features.RAND.nextGaussian() * ${field$deviation}, ${field$min}, ${field$max}))

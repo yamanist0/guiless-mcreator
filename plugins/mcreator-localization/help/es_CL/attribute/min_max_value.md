@@ -1,0 +1,1 @@
+Este parámetro controla los valores mínimos y máximos que el atributo puede ser configurado.

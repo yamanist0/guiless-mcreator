@@ -1,0 +1,1 @@
+Esta lista define em quais blocos a ferramenta pode ser usada.

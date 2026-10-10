@@ -1,0 +1,2 @@
+<#include "mcitems.ftl">
+new SphereReplaceConfig(${toStatetoFeatureState(input$targetState)}, FeatureSpread.func_242253_a(2, 4), ${input$radius}, ImmutableList.of(${toStatetoFeatureState(input$newState)}))

@@ -1,0 +1,12 @@
+{
+  "id": "generator-1.19.4",
+  "supportedversions": [2026002],
+  "info": {
+    "name": "Forge 1.19.4 Generator",
+    "version": "1.9",
+    "description": "This plugin includes a mod, datapack and resourcepack generator for Forge 1.19.4",
+    "author": "_Spectrall",
+    "updateJSONURL": "https://raw.githubusercontent.com/Spectrall368/Generator-1.19.4/2026.2/update.json",
+    "pluginPageID": 105663
+  }
+}

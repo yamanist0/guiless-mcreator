@@ -1,0 +1,281 @@
+name: Deploy binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      release-type:
+        type: choice
+        description: 'Release type'
+        required: true
+        default: 'snapshot'
+        options:
+          - snapshot
+          - release
+
+jobs:
+  prepare_export:
+    name: Prepare Export
+    runs-on: ubuntu-latest
+    environment: production
+    outputs:
+      mcr_version: ${{ steps.determineExportVersion.outputs.mcr_version }}
+      mc_version: ${{ steps.determineExportVersion.outputs.mc_version }}
+      build_date: ${{ steps.determineExportVersion.outputs.build_date }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify Repository
+        if: github.repository != 'MCreator/MCreator' && github.repository != 'KlemenDEV/MCreator'
+        run: |
+          cat << EOF
+          ⚠️Deploy action is only intended to be run from the official MCreator's repository. ⚠️
+          We do not allow custom distributions of the software under MCreator brand to be distributed publicly.
+          For more information, read LICENSE.txt.
+          EOF
+          exit 1
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25.0.2'
+          distribution: 'jetbrains'
+          java-package: 'jdk+jcef'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+      - name: Generate Export Report Release Using Gradle
+        if: github.event.inputs.release-type == 'release'
+        run: gradle generateExportReport
+      - name: Generate Export Report Snapshot Using Gradle
+        if: github.event.inputs.release-type == 'snapshot'
+        run: gradle generateExportReport -Psnapshot=true
+      - name: Determine Export Version
+        id: determineExportVersion
+        run: |
+          MCR_VERSION=$(cat build/reports/export.txt | grep "mcreator=" | cut -d'=' -f2)
+          MC_VERSION=$(cat build/reports/export.txt | grep "minecraft=" | cut -d'=' -f2)
+          BUILD_DATE=$(cat build/reports/export.txt | grep "builddate=" | cut -d'=' -f2)
+          echo "mcr_version=$MCR_VERSION" >> $GITHUB_OUTPUT
+          echo "mc_version=$MC_VERSION" >> $GITHUB_OUTPUT
+          echo "build_date=$BUILD_DATE" >> $GITHUB_OUTPUT
+
+  export_linux:
+    name: Build and Export (Linux)
+    needs: prepare_export
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: write
+      id-token: write
+    outputs:
+      vt_analysis: ${{ steps.vt_scan.outputs.analysis }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25.0.2'
+          distribution: 'jetbrains'
+          java-package: 'jdk+jcef'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+      - name: Build and Export Release Using Gradle
+        if: github.event.inputs.release-type == 'release'
+        run: gradle exportLinux
+      - name: Build and Export Snapshot Using Gradle
+        if: github.event.inputs.release-type == 'snapshot'
+        run: gradle exportLinux -Psnapshot=true
+      - name: VirusTotal Scan
+        id: vt_scan
+        uses: crazy-max/ghaction-virustotal@936d8c5c00afe97d3d9a1af26d017cfdf26800a2 #v5.0.0
+        continue-on-error: true
+        with:
+          vt_api_key: ${{ secrets.VT_API_KEY }}
+          files: build/export/*
+          request_rate: 4
+      - name: Upload Binaries and Tag Release
+        uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de #2.11.5
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.prepare_export.outputs.mcr_version }}
+          release_name: ${{ needs.prepare_export.outputs.mcr_version }}
+          prerelease: ${{ github.event.inputs.release-type == 'snapshot' }}
+          file_glob: true
+          file: build/export/*
+
+  export_windows:
+    name: Build and Export (Windows)
+    needs: prepare_export
+    runs-on: windows-latest
+    environment: production
+    permissions:
+      contents: write
+      id-token: write
+    outputs:
+      vt_analysis: ${{ steps.vt_scan.outputs.analysis }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25.0.2'
+          distribution: 'jetbrains'
+          java-package: 'jdk+jcef'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        name: Authenticate to Google Cloud
+        with:
+          workload_identity_provider: ${{ secrets.GC_WORKLOAD_IDENTITY_PROVIDER }}
+          project_id: ${{ secrets.GC_PROJECT_ID }}
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+        name: Set up Google Cloud SDK
+      - name: Build and Export Release Using Gradle
+        if: github.event.inputs.release-type == 'release'
+        shell: bash
+        env:
+          WIN_CERT_PEM: ${{ secrets.WIN_CERT_PEM }}
+          WIN_CERT_KEYNAME: ${{ secrets.WIN_CERT_KEYNAME }}
+          WIN_CERT_KEYSTORE: ${{ secrets.WIN_CERT_KEYSTORE }}
+        run: |
+          export WIN_CERT_STOREPASS="$(gcloud auth print-access-token)"
+          echo "$WIN_CERT_PEM" > codesign-chain.pem
+          gradle exportWindows -Pbuilddate=${{ needs.prepare_export.outputs.build_date }}
+      - name: Build and Export Snapshot Using Gradle
+        if: github.event.inputs.release-type == 'snapshot'
+        shell: bash
+        env:
+          WIN_CERT_PEM: ${{ secrets.WIN_CERT_PEM }}
+          WIN_CERT_KEYNAME: ${{ secrets.WIN_CERT_KEYNAME }}
+          WIN_CERT_KEYSTORE: ${{ secrets.WIN_CERT_KEYSTORE }}
+        run: |
+          export WIN_CERT_STOREPASS="$(gcloud auth print-access-token)"
+          echo "$WIN_CERT_PEM" > codesign-chain.pem
+          gradle exportWindows -Psnapshot=true -Pbuilddate=${{ needs.prepare_export.outputs.build_date }}
+      - name: VirusTotal Scan
+        id: vt_scan
+        uses: crazy-max/ghaction-virustotal@936d8c5c00afe97d3d9a1af26d017cfdf26800a2 #v5.0.0
+        continue-on-error: true
+        with:
+          vt_api_key: ${{ secrets.VT_API_KEY }}
+          files: build/export/*
+          request_rate: 4
+      - name: Upload Binaries and Tag Release
+        uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de #2.11.5
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.prepare_export.outputs.mcr_version }}
+          release_name: ${{ needs.prepare_export.outputs.mcr_version }}
+          prerelease: ${{ github.event.inputs.release-type == 'snapshot' }}
+          file_glob: true
+          file: build/export/*
+
+  export_macos:
+    name: Build and Export (macOS)
+    needs: prepare_export
+    runs-on: macos-latest
+    environment: production
+    outputs:
+      vt_analysis: ${{ steps.vt_scan.outputs.analysis }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25.0.2'
+          distribution: 'jetbrains'
+          java-package: 'jdk+jcef'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+      - name: Install Dependencies
+        run: |
+          brew install create-dmg
+      - name: Prepare Keychain
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          MACOS_CI_KEYCHAIN_PWD: ${{ secrets.MACOS_CI_KEYCHAIN_PWD }}
+          MACOS_NOTARIZATION_APPLE_ID: ${{ secrets.MACOS_NOTARIZATION_APPLE_ID }}
+          MACOS_NOTARIZATION_TEAM_ID: ${{ secrets.MACOS_NOTARIZATION_TEAM_ID }}
+          MACOS_NOTARIZATION_PWD: ${{ secrets.MACOS_NOTARIZATION_PWD }}
+        run: |
+          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+
+          security create-keychain -p "$MACOS_CI_KEYCHAIN_PWD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$MACOS_CI_KEYCHAIN_PWD" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+
+          security import certificate.p12 -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign -k ~/Library/Keychains/build.keychain
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$MACOS_CI_KEYCHAIN_PWD" build.keychain
+
+          xcrun notarytool store-credentials "notarytool-profile" --apple-id "$MACOS_NOTARIZATION_APPLE_ID" --team-id "$MACOS_NOTARIZATION_TEAM_ID" --password "$MACOS_NOTARIZATION_PWD"
+      - name: Build and Export Release Using Gradle
+        if: github.event.inputs.release-type == 'release'
+        env:
+          MACOS_CERTIFICATE_NAME: ${{ secrets.MACOS_CERTIFICATE_NAME }}
+        run: gradle exportMac -Pbuilddate=${{ needs.prepare_export.outputs.build_date }}
+      - name: Build and Export Snapshot Using Gradle
+        if: github.event.inputs.release-type == 'snapshot'
+        env:
+          MACOS_CERTIFICATE_NAME: ${{ secrets.MACOS_CERTIFICATE_NAME }}
+        run: gradle exportMac -Psnapshot=true -Pbuilddate=${{ needs.prepare_export.outputs.build_date }}
+      - name: VirusTotal Scan
+        id: vt_scan
+        uses: crazy-max/ghaction-virustotal@936d8c5c00afe97d3d9a1af26d017cfdf26800a2 #v5.0.0
+        continue-on-error: true
+        with:
+          vt_api_key: ${{ secrets.VT_API_KEY }}
+          files: build/export/*
+          request_rate: 4
+      - name: Upload Binaries and Tag Release
+        uses: svenstaro/upload-release-action@29e53e917877a24fad85510ded594ab3c9ca12de #2.11.5
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ needs.prepare_export.outputs.mcr_version }}
+          release_name: ${{ needs.prepare_export.outputs.mcr_version }}
+          prerelease: ${{ github.event.inputs.release-type == 'snapshot' }}
+          file_glob: true
+          file: build/export/*
+
+  update_release:
+    name: Update Release Notes
+    needs: [prepare_export, export_linux, export_windows, export_macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Format All VirusTotal Results
+        id: vt_format
+        run: |
+          {
+            echo "vt_markdown<<EOF"
+            echo "### VirusTotal Scans"
+            echo "${{ needs.export_linux.outputs.vt_analysis }},${{ needs.export_windows.outputs.vt_analysis }},${{ needs.export_macos.outputs.vt_analysis }}" | tr ',' '\n' | while IFS='=' read -r file url; do
+              [ -n "$file" ] && file=$(echo "$file" | tr '\\' '/') && echo "- [$(basename "$file")]($url)"
+            done
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+      - name: Update Release Notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.prepare_export.outputs.mcr_version }}
+          RELEASE_BODY: |
+            ### **Download: https://mcreator.net/download**
+            
+            ### Changelog: https://mcreator.net/changelog
+            
+            ${{ steps.vt_format.outputs.vt_markdown }}
+            
+            <!--[[
+            {
+            "minecraft": "${{ needs.prepare_export.outputs.mc_version }}"
+            }
+            ]]-->
+        run: gh release edit "$TAG_NAME" --notes "$RELEASE_BODY"

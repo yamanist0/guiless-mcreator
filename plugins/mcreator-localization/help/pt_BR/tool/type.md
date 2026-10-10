@@ -1,0 +1,1 @@
+Que tipo de ferramenta é esta?

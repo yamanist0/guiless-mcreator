@@ -1,0 +1,1 @@
+Ez a lista határozza meg, hogy az eszköz milyen blokkokon használható.

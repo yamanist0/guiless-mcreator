@@ -1,0 +1,36 @@
+{
+  "args0": [
+    {
+      "type": "input_statement",
+      "name": "worldstatements"
+    },
+    {
+      "type": "field_data_list_selector",
+      "name": "dimension",
+      "datalist": "dimensions",
+      "customEntryProviders": "dimension"
+    }
+  ],
+  "inputsInline": true,
+  "previousStatement": null,
+  "nextStatement": null,
+  "colour": 35,
+  "mcreator": {
+    "toolbox_id": "worldmanagement",
+    "fields": [
+      "dimension"
+    ],
+    "statements": [
+      {
+        "name": "worldstatements",
+        "disable_local_variables": true
+      }
+    ],
+    "dependencies": [
+      {
+        "name": "world",
+        "type": "world"
+      }
+    ]
+  }
+}

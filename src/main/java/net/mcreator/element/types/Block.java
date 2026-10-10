@@ -1,0 +1,755 @@
+/*
+ * MCreator (https://mcreator.net/)
+ * Copyright (C) 2020 Pylo and contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package net.mcreator.element.types;
+
+import net.mcreator.element.BaseType;
+import net.mcreator.element.GeneratableElement;
+import net.mcreator.element.parts.*;
+import net.mcreator.element.parts.procedure.NumberProcedure;
+import net.mcreator.element.parts.procedure.Procedure;
+import net.mcreator.element.parts.procedure.StringListProcedure;
+import net.mcreator.element.types.interfaces.*;
+import net.mcreator.generator.GeneratorFlavor;
+import net.mcreator.generator.mapping.NameMapper;
+import net.mcreator.io.FileIO;
+import net.mcreator.minecraft.MCItem;
+import net.mcreator.minecraft.MinecraftImageGenerator;
+import net.mcreator.minecraft.states.PropertyData;
+import net.mcreator.minecraft.states.PropertyDataWithValue;
+import net.mcreator.minecraft.states.StateMap;
+import net.mcreator.minecraft.states.BlockStatePropertyUtils;
+import net.mcreator.workspace.resources.TextureType;
+import net.mcreator.util.ListUtils;
+import net.mcreator.util.image.ImageUtils;
+import net.mcreator.workspace.Workspace;
+import net.mcreator.workspace.elements.ModElement;
+import net.mcreator.workspace.references.ModElementReference;
+import net.mcreator.workspace.references.ResourceReference;
+import net.mcreator.workspace.references.TextureReference;
+import net.mcreator.workspace.resources.Model;
+import net.mcreator.workspace.resources.TexturedModel;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import javax.swing.*;
+import java.awt.*;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.lang.module.ModuleDescriptor;
+import java.util.*;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@SuppressWarnings({ "unused", "NotNullFieldNotInitialized" }) public class Block extends GeneratableElement
+		implements IBlock, IItemWithModel, ITabContainedElement, ISpecialInfoHolder, IBlockWithBoundingBox,
+		IMultipleNames, IBlockWithLootTable {
+
+	private static final Logger LOG = LogManager.getLogger(Block.class);
+
+	@TextureReference(TextureType.BLOCK) public TextureHolder texture;
+	@TextureReference(TextureType.BLOCK) public TextureHolder textureTop;
+	@TextureReference(TextureType.BLOCK) public TextureHolder textureLeft;
+	@TextureReference(TextureType.BLOCK) public TextureHolder textureFront;
+	@TextureReference(TextureType.BLOCK) public TextureHolder textureRight;
+	@TextureReference(TextureType.BLOCK) public TextureHolder textureBack;
+	public int renderType;
+	@Nonnull public String customModelName;
+	@LimitedOptions({ "none", "player_y_axis", "player_all_axis", "block_y_axis", "block_all_axis", "log" })
+	public int rotationMode;
+	public boolean enablePitch;
+	public boolean emissiveRendering;
+	public boolean displayFluidOverlay;
+
+	@TextureReference(TextureType.BLOCK) @ResourceReference("model") public List<Block.StateEntry> states;
+
+	@ModElementReference @ResourceReference("animation") public List<AnimationEntry> animations;
+
+	@TextureReference(TextureType.ITEM) @Nullable public TextureHolder itemTexture;
+	@TextureReference(TextureType.BLOCK) @Nullable public TextureHolder particleTexture;
+
+	@Nullable
+	@LimitedOptions({ "Stairs", "Slab", "Fence", "Wall", "Leaves", "TrapDoor", "Pane", "Door", "FenceGate", "EndRod",
+			"PressurePlate", "Button", "FlowerPot", "Sign", "HangingSign" }) public String blockBase;
+	@LimitedOptions({ "OAK", "STONE", "IRON" })
+	@NonNullIf({ "blockBase %= Door", "blockBase %= TrapDoor", "blockBase %= PressurePlate", "blockBase %= Button" })
+	public String blockSetType;
+	@NonNullIf("blockBase %= FlowerPot") public MItemBlock pottedPlant;
+	public ParticleEntry leavesParticleType;
+	@Numeric(init = 0.01, min = 0, max = 1, step = 0.001) public double leavesParticleChance;
+	@NonNullIf({ "blockBase %= Sign", "blockBase %= HangingSign" }) @TextureReference(TextureType.ENTITY)
+	public TextureHolder signEntityTexture;
+	@NonNullIf("blockBase %= HangingSign") @TextureReference(TextureType.SCREEN) public TextureHolder signGUITexture;
+
+	@LimitedOptions({ "No tint", "Grass", "Foliage", "Birch foliage", "Spruce foliage", "Default foliage", "Water",
+			"Sky", "Fog", "Water fog" }) public String tintType;
+	public boolean isItemTinted;
+
+	public boolean hasTransparency;
+	public boolean connectedSides;
+	@LimitedOptions({ "SOLID", "CUTOUT", "CUTOUT_MIPPED", "TRANSLUCENT" }) public String transparencyType;
+
+	public boolean disableOffset;
+	public List<BoxEntry> boundingBoxes;
+
+	public List<PropertyDataWithValue<?>> customProperties;
+
+	public String name;
+	public StringListProcedure specialInformation;
+	@Numeric(init = 1, min = -1, max = 64000, step = 0.05) public double hardness;
+	@Numeric(init = 10, min = 0, max = Integer.MAX_VALUE, step = 0.5) public double resistance;
+	public boolean hasGravity;
+	public boolean isWaterloggable;
+
+	public boolean hasBlockItem;
+	@Numeric(init = 64, min = 1, max = 99, step = 1) public int maxStackSize;
+	@LimitedOptions({ "COMMON", "UNCOMMON", "RARE", "EPIC" }) public String rarity;
+	public boolean immuneToFire;
+	@ModElementReference public List<TabEntry> creativeTabs;
+
+	@LimitedOptions({ "Not specified", "pickaxe", "axe", "shovel", "hoe" }) @Nonnull public String destroyTool;
+	public MItemBlock customDrop;
+	@Numeric(init = 1, min = 0, max = 99, step = 1) public int dropAmount;
+	@Numeric(init = 0, min = 0, max = 1024, step = 1, allowMinMaxEqual = true) public int xpAmountMin;
+	@Numeric(init = 0, min = 0, max = 1024, step = 1, allowMinMaxEqual = true) public int xpAmountMax;
+	public boolean useLootTableForDrops;
+	public boolean requiresCorrectTool;
+
+	@Numeric(init = 0, min = 0, max = 1024, step = 0.1) public double enchantPowerBonus;
+	public boolean plantsGrowOn;
+	public boolean canRedstoneConnect;
+	public boolean hasCustomOpacity;
+	@Numeric(init = 15, min = 0, max = 15, step = 1) public int lightOpacity;
+
+	@Numeric(init = 0, min = 0, max = 9999999, step = 1) public int tickRate;
+	public boolean tickRandomly;
+
+	public boolean isReplaceable;
+	public boolean canProvidePower;
+	public NumberProcedure emittedRedstonePower;
+	@NonNullMappable("DEFAULT") public MapColor colorOnMap;
+	@NonNullMappable("harp") public NoteBlockInstrument noteBlockInstrument;
+	public MItemBlock creativePickItem;
+	@LimitedOptions({ "NONE", "XZ", "XYZ" }) public String offsetType;
+	@NonNullMappable("DEFAULT") public AIPathNodeType aiPathNodeType;
+	public Color beaconColorModifier;
+	public MItemBlock strippingResult;
+
+	public boolean ignitedByLava;
+	@Numeric(init = 0, min = 0, max = 1024, step = 1) public int flammability;
+	@Numeric(init = 0, min = 0, max = 1024, step = 1) public int fireSpreadSpeed;
+
+	public boolean isLadder;
+	@Numeric(init = 0.6, min = 0.01, max = 5, step = 0.01) public double slipperiness;
+	@Numeric(init = 1, min = -1000, max = 1000, step = 0.1) public double speedFactor;
+	@Numeric(init = 1, min = -1000, max = 1000, step = 0.1) public double jumpFactor;
+	@LimitedOptions({ "NORMAL", "DESTROY", "BLOCK", "PUSH_ONLY", "IGNORE" }) public String reactionToPushing;
+
+	public boolean isNotColidable;
+
+	public StepSound soundOnStep;
+	public boolean isCustomSoundType;
+	@NonNullIf("isCustomSoundType") public Sound breakSound;
+	@NonNullIf("isCustomSoundType") public Sound fallSound;
+	@NonNullIf("isCustomSoundType") public Sound hitSound;
+	@NonNullIf("isCustomSoundType") public Sound placeSound;
+	@NonNullIf("isCustomSoundType") public Sound stepSound;
+
+	public NumberProcedure luminance;
+	public boolean unbreakable;
+	@LimitedOptions({ "NONE", "STONE", "IRON", "DIAMOND" }) public String vanillaToolTier;
+	public Procedure additionalHarvestCondition;
+
+	public Procedure placingCondition;
+
+	public boolean isBonemealable;
+	public Procedure isBonemealTargetCondition;
+	public Procedure bonemealSuccessCondition;
+	public Procedure onBonemealSuccess;
+
+	public boolean sensitiveToVibration;
+	@NonNullIf("sensitiveToVibration") public List<GameEventEntry> vibrationalEvents;
+	@NonNullIf("sensitiveToVibration") public NumberProcedure vibrationSensitivityRadius;
+	public Procedure canReceiveVibrationCondition;
+	public Procedure onReceivedVibration;
+
+	public boolean hasInventory;
+	@ModElementReference(acceptedTypes = { GUI.class }) @Nullable public String guiBoundTo;
+	public boolean openGUIOnRightClick;
+	@Numeric(init = 9, min = 0, max = 256, step = 1) public int inventorySize;
+	@Numeric(init = 99, min = 1, max = 1024, step = 1) public int inventoryStackSize;
+	public boolean inventoryDropWhenDestroyed;
+	public boolean inventoryComparatorPower;
+	public List<Integer> inventoryOutSlotIDs;
+	public List<Integer> inventoryInSlotIDs;
+	public Procedure inventoryAutomationTakeCondition;
+	public Procedure inventoryAutomationPlaceCondition;
+
+	public boolean hasEnergyStorage;
+	@NonNullIf("hasEnergyStorage") @Numeric(init = 0, min = 0, max = Integer.MAX_VALUE, step = 1)
+	public int energyInitial;
+	@NonNullIf("hasEnergyStorage") @Numeric(init = 400000, min = 0, max = Integer.MAX_VALUE, step = 1)
+	public int energyCapacity;
+	@NonNullIf("hasEnergyStorage") @Numeric(init = 200, min = 0, max = Integer.MAX_VALUE, step = 1)
+	public int energyMaxReceive;
+	@NonNullIf("hasEnergyStorage") @Numeric(init = 200, min = 0, max = Integer.MAX_VALUE, step = 1)
+	public int energyMaxExtract;
+
+	public boolean isFluidTank;
+	@NonNullIf("isFluidTank") @Numeric(init = 8000, min = 0, max = Integer.MAX_VALUE, step = 1)
+	public int fluidCapacity;
+	@NonNullIf("isFluidTank") @ModElementReference public List<FluidEntry> fluidRestrictions;
+
+	public Procedure onRightClicked;
+	public Procedure onBlockAdded;
+	public Procedure onNeighbourBlockChanges;
+	public Procedure onTickUpdate;
+	public Procedure onRandomUpdateEvent;
+	public Procedure onDestroyedByPlayer;
+	public Procedure onDestroyedByExplosion;
+	public Procedure onStartToDestroy;
+	public Procedure onEntityCollides;
+	public Procedure onEntityWalksOn;
+	public Procedure onBlockPlayedBy;
+	public Procedure onRedstoneOn;
+	public Procedure onRedstoneOff;
+	public Procedure onHitByProjectile;
+	public Procedure onEntityFallsOn;
+
+	public boolean generateFeature;
+	@ModElementReference public List<BiomeEntry> restrictionBiomes;
+	@NonNullIf("generateFeature") @ModElementReference public List<MItemBlock> blocksToReplace;
+	@LimitedOptions({ "UNIFORM", "TRIANGLE" }) public String generationShape;
+	@NonNullIf("generateFeature") @Numeric(init = 10, min = 1, max = 64, step = 1) public int frequencyPerChunks;
+	@NonNullIf("generateFeature") @Numeric(init = 16, min = 1, max = 64, step = 1) public int frequencyOnChunk;
+	@NonNullIf("generateFeature") @Numeric(init = 0, min = -64, max = 320, step = 1, allowMinMaxEqual = true)
+	public int minGenerateHeight;
+	@NonNullIf("generateFeature") @Numeric(init = 64, min = -64, max = 320, step = 1, allowMinMaxEqual = true)
+	public int maxGenerateHeight;
+
+	private Block() {
+		this(null);
+	}
+
+	public Block(ModElement element) {
+		super(element);
+
+		this.hasBlockItem = true;
+		this.maxStackSize = 64;
+		this.rarity = "COMMON";
+		this.creativeTabs = new ArrayList<>();
+
+		this.customProperties = new ArrayList<>();
+
+		this.blockSetType = "OAK";
+		this.leavesParticleChance = 0;
+		this.tintType = "No tint";
+		this.boundingBoxes = new ArrayList<>(List.of(new IBlockWithBoundingBox.BoxEntry()));
+		this.restrictionBiomes = new ArrayList<>();
+		this.blocksToReplace = new ArrayList<>();
+		this.reactionToPushing = "NORMAL";
+		this.slipperiness = 0.6;
+		this.speedFactor = 1.0;
+		this.jumpFactor = 1.0;
+		this.hasCustomOpacity = true;
+		this.offsetType = "NONE";
+		this.generationShape = "UNIFORM";
+		this.destroyTool = "Not specified";
+		this.vanillaToolTier = "NONE";
+		this.inventoryInSlotIDs = new ArrayList<>();
+		this.inventoryOutSlotIDs = new ArrayList<>();
+
+		this.energyCapacity = 400000;
+		this.energyMaxReceive = 200;
+		this.energyMaxExtract = 200;
+		this.fluidCapacity = 8000;
+		this.fluidRestrictions = new ArrayList<>();
+
+		this.vibrationalEvents = new ArrayList<>();
+
+		this.animations = new ArrayList<>();
+
+		this.states = new ArrayList<>();
+	}
+
+	@Override public void finalizeModElementGeneration() {
+		if (isSign()) {
+			try {
+				File entityTextureLocation = new File(
+						getModElement().getFolderManager().getTexturesFolder(TextureType.OTHER),
+						("Sign".equals(blockBase) ? "entity/signs/" : "entity/signs/hanging/")
+								+ getModElement().getRegistryName() + ".png");
+				FileIO.copyFile(signEntityTexture.toFile(TextureType.ENTITY), entityTextureLocation);
+			} catch (Exception e) {
+				LOG.error("Failed to copy sign entity texture", e);
+			}
+			if ("HangingSign".equals(blockBase)) {
+				try {
+					File GUITextureLocation = new File(
+							getModElement().getFolderManager().getTexturesFolder(TextureType.OTHER),
+							"gui/hanging_signs/" + getModElement().getRegistryName() + ".png");
+					FileIO.copyFile(signGUITexture.toFile(TextureType.SCREEN), GUITextureLocation);
+				} catch (Exception e) {
+					LOG.error("Failed to copy sign GUI texture", e);
+				}
+			}
+		}
+	}
+
+	public int renderType() {
+		if (blockBase != null && !blockBase.isEmpty() && !blockBase.equals("FlowerPot"))
+			return -1;
+		return renderType;
+	}
+
+	public boolean hasCustomDrop() {
+		return customDrop != null && !customDrop.isEmpty();
+	}
+
+	public boolean generateLootTable() {
+		return !useLootTableForDrops;
+	}
+
+	public boolean isBlockTinted() {
+		return !"No tint".equals(tintType);
+	}
+
+	@Override public boolean isDoubleBlock() {
+		return "Door".equals(blockBase);
+	}
+
+	public boolean isSign() {
+		return "Sign".equals(blockBase) || "HangingSign".equals(blockBase);
+	}
+
+	public boolean shouldOpenGUIOnRightClick() {
+		return guiBoundTo != null && openGUIOnRightClick;
+	}
+
+	public boolean shouldScheduleTick() {
+		return tickRate > 0 && !tickRandomly;
+	}
+
+	public boolean shouldDisableOffset() {
+		return disableOffset || offsetType.equals("NONE");
+	}
+
+	@Override public MItemBlock getDefaultDrop() {
+		if (dropAmount == 0) {
+			return new MItemBlock(getModElement().getWorkspace(), "Blocks.AIR");
+		} else if (hasCustomDrop()) {
+			return customDrop;
+		} else if ("FlowerPot".equals(blockBase)) {
+			return pottedPlant;
+		} else if (hasBlockItem) {
+			return new MItemBlock(getModElement().getWorkspace(),
+					NameMapper.MCREATOR_PREFIX + this.getModElement().getName());
+		} else {
+			return new MItemBlock(getModElement().getWorkspace(), "Blocks.AIR");
+		}
+	}
+
+	@Override public boolean dropsWithSilkTouch() {
+		return hasBlockItem && "Leaves".equals(blockBase);
+	}
+
+	@Override public boolean dropsWithShears() {
+		return hasBlockItem && "Leaves".equals(blockBase);
+	}
+
+	public boolean supportsBlockStates() {
+		if (getItemModel().getType() == Model.Type.JAVA)
+			return false;
+
+		return blockBase == null || blockBase.isEmpty();
+	}
+
+	@Override public boolean isFullCube() {
+		if ("Stairs".equals(blockBase) || "Slab".equals(blockBase) || "Fence".equals(blockBase) || "Wall".equals(
+				blockBase) || "TrapDoor".equals(blockBase) || "Door".equals(blockBase) || "FenceGate".equals(blockBase)
+				|| "EndRod".equals(blockBase) || "PressurePlate".equals(blockBase) || "Button".equals(blockBase)
+				|| "FlowerPot".equals(blockBase) || "Sign".equals(blockBase) || "HangingSign".equals(blockBase))
+			return false;
+
+		return IBlockWithBoundingBox.super.isFullCube();
+	}
+
+	@Override public Model getItemModel() {
+		Model.Type modelType = Model.Type.BUILTIN;
+		if (renderType == 2)
+			modelType = Model.Type.JSON;
+		else if (renderType == 3)
+			modelType = Model.Type.OBJ;
+		else if (renderType == 4)
+			modelType = Model.Type.JAVA;
+		return Model.getModelByParams(getModElement().getWorkspace(), customModelName, modelType);
+	}
+
+	@Override public Map<String, TextureHolder> getTextureMap() {
+		Model model = getItemModel();
+		if (model instanceof TexturedModel && ((TexturedModel) model).getTextureMapping() != null)
+			return ((TexturedModel) model).getTextureMapping().getTextureMap();
+		return new HashMap<>();
+	}
+
+	@Override public List<TabEntry> getCreativeTabs() {
+		return creativeTabs;
+	}
+
+	@Override public @Nonnull List<BoxEntry> getValidBoundingBoxes() {
+		return boundingBoxes.stream().filter(BoxEntry::isNotEmpty).collect(Collectors.toList());
+	}
+
+	@Override public BufferedImage generateModElementPicture() {
+		if ((hasBlockItem && itemTexture != null && !itemTexture.isEmpty()) || (renderType() == 4)) {
+			return ImageUtils.resizeAndCrop(itemTexture.getImage(TextureType.ITEM), 32);
+		} else if (renderType() == 10) {
+			return (BufferedImage) MinecraftImageGenerator.Preview.generateBlockIcon(getTextureWithFallback(textureTop),
+					getTextureWithFallback(textureLeft), getTextureWithFallback(textureFront));
+		} else if (renderType() == 11 || renderType() == 110 || "Leaves".equals(blockBase)) {
+			return (BufferedImage) MinecraftImageGenerator.Preview.generateBlockIcon(getMainTexture(), getMainTexture(),
+					getMainTexture());
+		} else if ("Slab".equals(blockBase)) {
+			return (BufferedImage) MinecraftImageGenerator.Preview.generateSlabIcon(getTextureWithFallback(textureTop),
+					getTextureWithFallback(textureFront));
+		} else if ("TrapDoor".equals(blockBase)) {
+			return (BufferedImage) MinecraftImageGenerator.Preview.generateTrapdoorIcon(getMainTexture());
+		} else if ("Stairs".equals(blockBase)) {
+			return (BufferedImage) MinecraftImageGenerator.Preview.generateStairsIcon(
+					getTextureWithFallback(textureTop), getTextureWithFallback(textureFront));
+		} else if ("Wall".equals(blockBase)) {
+			return (BufferedImage) MinecraftImageGenerator.Preview.generateWallIcon(getMainTexture());
+		} else if ("Fence".equals(blockBase)) {
+			return (BufferedImage) MinecraftImageGenerator.Preview.generateFenceIcon(getMainTexture());
+		} else if ("FenceGate".equals(blockBase)) {
+			return (BufferedImage) MinecraftImageGenerator.Preview.generateFenceGateIcon(getMainTexture());
+		} else if ("EndRod".equals(blockBase)) {
+			return (BufferedImage) MinecraftImageGenerator.Preview.generateEndRodIcon(getMainTexture());
+		} else if ("PressurePlate".equals(blockBase)) {
+			return (BufferedImage) MinecraftImageGenerator.Preview.generatePressurePlateIcon(getMainTexture());
+		} else if ("Button".equals(blockBase)) {
+			return (BufferedImage) MinecraftImageGenerator.Preview.generateButtonIcon(getMainTexture());
+		} else if (renderType() == 14) {
+			Image side = ImageUtils.drawOver(getTextureWithFallback(textureFront),
+					getTextureWithFallback(textureLeft));
+			return (BufferedImage) MinecraftImageGenerator.Preview.generateBlockIcon(getTextureWithFallback(textureTop),
+					side, side);
+		} else {
+			return ImageUtils.resizeAndCrop(getMainTexture(), 32);
+		}
+	}
+
+	@Override public List<MCItem> providedMCItems() {
+		ArrayList<MCItem> retval = new ArrayList<>();
+		retval.add(new MCItem.Custom(this.getModElement(), null, hasBlockItem ? "block" : "block_without_item"));
+
+		if (isSign()) // Provide sign wall block
+			retval.add(new MCItem.Custom(this.getModElement(), "wall", "block_without_item", "Wall sign"));
+
+		return retval;
+	}
+
+	@Override public ImageIcon getIconForMCItem(Workspace workspace, String suffix) {
+		if ("wall".equals(suffix)) {
+			if ("Sign".equals(blockBase)) {
+				return new ImageIcon(MinecraftImageGenerator.Preview.generateWallSignIcon(
+						signEntityTexture.getImage(TextureType.ENTITY)));
+			} else if ("HangingSign".equals(blockBase)) {
+				return new ImageIcon(MinecraftImageGenerator.Preview.generateWallHangingSignIcon(
+						signEntityTexture.getImage(TextureType.ENTITY)));
+			}
+		}
+		return null;
+	}
+
+	@Override public List<MCItem> getCreativeTabItems() {
+		return hasBlockItem ? List.of(new MCItem.Custom(this.getModElement(), null, "block")) : Collections.emptyList();
+	}
+
+	@Override public StringListProcedure getSpecialInfoProcedure() {
+		return specialInformation;
+	}
+
+	private Image getMainTexture() {
+		return texture.getImage(TextureType.BLOCK);
+	}
+
+	private Image getTextureWithFallback(TextureHolder texture) {
+		if (texture.isEmpty())
+			return getMainTexture();
+		return texture.getImage(TextureType.BLOCK);
+	}
+
+	@Override public String getRenderType() {
+		if (hasTransparency && transparencyType.equals(
+				"solid")) // if hasTransparency is enabled but transparencyType is left solid, we assume cutout
+			return "cutout";
+
+		return transparencyType.toLowerCase(Locale.ENGLISH);
+	}
+
+	@Override public boolean hasCustomItemProperties() {
+		return maxStackSize != 64 || !rarity.equals("COMMON") || immuneToFire;
+	}
+
+	@Override public Collection<BaseType> getBaseTypesProvided() {
+		List<BaseType> baseTypes = new ArrayList<>(List.of(BaseType.BLOCK));
+
+		if (hasBlockItem) {
+			baseTypes.add(BaseType.ITEM);
+		}
+
+		if (generateFeature) {
+			baseTypes.add(BaseType.CONFIGUREDFEATURE);
+			if (getModElement().getGenerator().getGeneratorConfiguration().getGeneratorFlavor()
+					== GeneratorFlavor.FABRIC ||
+					ModuleDescriptor.Version.parse(getModElement().getGenerator().getGeneratorMinecraftVersion())
+							.compareTo(ModuleDescriptor.Version.parse("1.18.2")) <= 0)
+				baseTypes.add(
+						BaseType.FEATURE); // Fabric and old Forge versions needs Java code to register feature generation
+		}
+
+		if (hasInventory)
+			baseTypes.add(BaseType.BLOCKENTITY);
+
+		return baseTypes;
+	}
+
+	public Set<String> getVibrationalEvents() {
+		return vibrationalEvents.stream().map(GameEventEntry::getUnmappedValue).collect(Collectors.toSet());
+	}
+
+	public int getLeavesParticleColor() {
+		return ImageUtils.getAverageColor(ImageUtils.toBufferedImage(texture.getImage(TextureType.BLOCK))).brighter()
+				.brighter().getRGB();
+	}
+
+	public TextureHolder textureTop() {
+		return textureTop == null || textureTop.isEmpty() ? texture : textureTop;
+	}
+
+	public TextureHolder textureLeft() {
+		return textureLeft == null || textureLeft.isEmpty() ? texture : textureLeft;
+	}
+
+	public TextureHolder textureFront() {
+		return textureFront == null || textureFront.isEmpty() ? texture : textureFront;
+	}
+
+	public TextureHolder textureRight() {
+		return textureRight == null || textureRight.isEmpty() ? texture : textureRight;
+	}
+
+	public TextureHolder textureBack() {
+		return textureBack == null || textureBack.isEmpty() ? texture : textureBack;
+	}
+
+	public TextureHolder getParticleTexture() {
+		return particleTexture == null || particleTexture.isEmpty() ? texture : particleTexture;
+	}
+
+	/**
+	 * @return List of user-defined states or empty list if none defined or of the current block does not support custom block states
+	 */
+	public List<StateEntry> getDefinedStates() {
+		if (!supportsBlockStates() || states.isEmpty())
+			return List.of();
+		return new ArrayList<>(states);
+	}
+
+	/**
+	 * @return List of {@link #states} with missing state combinations autofilled
+	 */
+	public List<StateEntry> getStateCombinations() {
+		if (!supportsBlockStates() || states.isEmpty())
+			return List.of();
+
+		// add user-defined states
+		ArrayList<StateEntry> retval = new ArrayList<>(states);
+
+		// autofill missing state condition combinations below
+
+		// collect all used properties (all state maps use all properties as UI validation ensures this)
+		Set<PropertyData<?>> usedProperties = states.getFirst().stateMap.keySet();
+
+		// generate a list of all possible state condition combinations
+		Map<PropertyData<?>, List<Object>> valueMap = new LinkedHashMap<>();
+		for (PropertyData<?> prop : usedProperties) {
+			valueMap.put(prop, BlockStatePropertyUtils.getPossiblePropertyValues(prop));
+		}
+
+		Set<StateMap> possibleStateCombinations = new HashSet<>();
+		for (Map<PropertyData<?>, Object> combo : ListUtils.cartesianProduct(valueMap)) {
+			StateMap stateCombination = new StateMap();
+			stateCombination.putAll(combo);
+			possibleStateCombinations.add(stateCombination);
+		}
+
+		// remove combinations that are already handled
+		possibleStateCombinations.removeAll(states.stream().map(s -> s.stateMap).collect(Collectors.toSet()));
+
+		// add combinations that are missing
+		for (StateMap possibleStateCombination : possibleStateCombinations) {
+			var stateEntry = new StateEntry();
+			stateEntry.renderType = -1; // use the default model
+			stateEntry.stateMap = possibleStateCombination;
+			retval.add(stateEntry);
+		}
+
+		return retval;
+	}
+
+	public List<StateEntry> getDefinedStatesWithCustomShape() {
+		List<StateEntry> retval = new ArrayList<>();
+		for (StateEntry stateEntry : getDefinedStates()) {
+			if (stateEntry.hasCustomBoundingBox && !stateEntry.isFullCube()) {
+				retval.add(stateEntry);
+			}
+		}
+		return retval;
+	}
+
+	public List<String> getPropertiesUsedInStates() {
+		if (!supportsBlockStates() || states.isEmpty())
+			return List.of();
+		return states.getFirst().stateMap.keySet().stream().map(PropertyData::getName).collect(Collectors.toList());
+	}
+
+	public String getWallName() {
+		String elementName = this.getModElement().getName();
+		if (elementName.endsWith("HangingSign"))
+			return elementName.substring(0, elementName.length() - 11) + "WallHangingSign";
+		else if (elementName.endsWith("Sign"))
+			return elementName.substring(0, elementName.length() - 4) + "WallSign";
+		else
+			return "Wall" + elementName;
+	}
+
+	public String getWallRegistryName() {
+		String registryName = this.getModElement().getRegistryName();
+		if (registryName.endsWith("hanging_sign"))
+			return registryName.substring(0, registryName.length() - 12) + "wall_hanging_sign";
+		else if (registryName.endsWith("sign"))
+			return registryName.substring(0, registryName.length() - 4) + "wall_sign";
+		else
+			return "wall_" + registryName;
+	}
+
+	public String getWallRegistryNameUpper() {
+		return getWallRegistryName().toUpperCase(Locale.ENGLISH);
+	}
+
+	@Override public Collection<String> getAdditionalNames() {
+		if (isSign())
+			return List.of(this.getWallName());
+		else
+			return Collections.emptyList();
+	}
+
+	public static class StateEntry implements IWorkspaceDependent, IItemWithModel, IBlockWithBoundingBox {
+
+		@TextureReference(TextureType.BLOCK) public TextureHolder texture;
+		@TextureReference(TextureType.BLOCK) public TextureHolder textureTop;
+		@TextureReference(TextureType.BLOCK) public TextureHolder textureLeft;
+		@TextureReference(TextureType.BLOCK) public TextureHolder textureFront;
+		@TextureReference(TextureType.BLOCK) public TextureHolder textureRight;
+		@TextureReference(TextureType.BLOCK) public TextureHolder textureBack;
+		public int renderType;
+		@Nonnull public String customModelName;
+
+		@TextureReference(TextureType.BLOCK) public TextureHolder particleTexture;
+
+		public boolean hasCustomBoundingBox;
+		public List<BoxEntry> boundingBoxes;
+
+		public StateMap stateMap;
+
+		@Nullable transient Workspace workspace;
+
+		public StateEntry() {
+			this.boundingBoxes = new ArrayList<>(List.of(new IBlockWithBoundingBox.BoxEntry()));
+		}
+
+		@Override public void setWorkspace(@Nullable Workspace workspace) {
+			this.workspace = workspace;
+		}
+
+		@Nullable @Override public Workspace getWorkspace() {
+			return workspace;
+		}
+
+		// Helper methods so the same templates as for the main model can be used
+
+		public TextureHolder textureTop() {
+			return textureTop == null || textureTop.isEmpty() ? texture : textureTop;
+		}
+
+		public TextureHolder textureLeft() {
+			return textureLeft == null || textureLeft.isEmpty() ? texture : textureLeft;
+		}
+
+		public TextureHolder textureFront() {
+			return textureFront == null || textureFront.isEmpty() ? texture : textureFront;
+		}
+
+		public TextureHolder textureRight() {
+			return textureRight == null || textureRight.isEmpty() ? texture : textureRight;
+		}
+
+		public TextureHolder textureBack() {
+			return textureBack == null || textureBack.isEmpty() ? texture : textureBack;
+		}
+
+		public TextureHolder getParticleTexture(TextureHolder fallback) {
+			return particleTexture == null || particleTexture.isEmpty() ? fallback : particleTexture;
+		}
+
+		@Override public Model getItemModel() {
+			Model.Type modelType = Model.Type.BUILTIN;
+			if (renderType == 2)
+				modelType = Model.Type.JSON;
+			else if (renderType == 3)
+				modelType = Model.Type.OBJ;
+			return Model.getModelByParams(workspace, customModelName, modelType);
+		}
+
+		@Override public Map<String, TextureHolder> getTextureMap() {
+			Model model = getItemModel();
+			if (model instanceof TexturedModel && ((TexturedModel) model).getTextureMapping() != null)
+				return ((TexturedModel) model).getTextureMapping().getTextureMap();
+			return new HashMap<>();
+		}
+
+		@Override public @Nonnull List<BoxEntry> getValidBoundingBoxes() {
+			return boundingBoxes.stream().filter(BoxEntry::isNotEmpty).collect(Collectors.toList());
+		}
+
+	}
+
+	public static class AnimationEntry {
+
+		public Animation animation;
+		public double speed;
+
+		public Procedure condition;
+
+	}
+
+}

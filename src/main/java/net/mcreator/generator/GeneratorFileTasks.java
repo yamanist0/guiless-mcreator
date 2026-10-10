@@ -1,0 +1,241 @@
+/*
+ * MCreator (https://mcreator.net/)
+ * Copyright (C) 2012-2020, Pylo
+ * Copyright (C) 2020-2022, Pylo, opensource contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package net.mcreator.generator;
+
+import net.mcreator.generator.io.GradleTrackingFileIO;
+import net.mcreator.generator.io.JavaWriter;
+import net.mcreator.generator.template.TemplateGeneratorException;
+import net.mcreator.io.FileIO;
+import net.mcreator.minecraft.RegistryNameFixer;
+import net.mcreator.minecraft.MinecraftImageGenerator;
+import net.mcreator.util.image.ImageUtils;
+import net.mcreator.workspace.resources.Animation;
+import net.mcreator.workspace.resources.Model;
+import net.mcreator.workspace.resources.ModelUtils;
+
+import javax.annotation.Nullable;
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+public class GeneratorFileTasks {
+
+	public static void runFileTasks(Generator generator, @Nullable List<?> setupTasks) {
+		if (setupTasks == null)
+			return;
+
+		try {
+			setupTasks.forEach(task -> {
+			String taskType = (String) ((Map<?, ?>) task).get("task");
+			switch (taskType) {
+			case "copy_file" -> {
+				File from = new File(GeneratorTokens.replaceTokens(generator.getWorkspace(),
+						(String) ((Map<?, ?>) task).get("from")));
+				File to = new File(
+						GeneratorTokens.replaceTokens(generator.getWorkspace(), (String) ((Map<?, ?>) task).get("to")));
+				if (generator.getWorkspace().getFolderManager().isFileInWorkspace(to) && from.isFile())
+					GradleTrackingFileIO.copyFile(generator, from, to);
+			}
+			case "copy_and_resize_image" -> {
+				File from = new File(GeneratorTokens.replaceTokens(generator.getWorkspace(),
+						(String) ((Map<?, ?>) task).get("from")));
+				File to = new File(
+						GeneratorTokens.replaceTokens(generator.getWorkspace(), (String) ((Map<?, ?>) task).get("to")));
+				int w = Integer.parseInt(GeneratorTokens.replaceTokens(generator.getWorkspace(),
+						(String) ((Map<?, ?>) task).get("width")));
+				int h = Integer.parseInt(GeneratorTokens.replaceTokens(generator.getWorkspace(),
+						(String) ((Map<?, ?>) task).get("height")));
+				if (generator.getWorkspace().getFolderManager().isFileInWorkspace(to) && from.isFile()) {
+					try {
+						BufferedImage image = ImageIO.read(from);
+						if (image == null)
+							throw new IOException("image could not be decoded");
+						BufferedImage resized = ImageUtils.toBufferedImage(ImageUtils.resize(image, w, h));
+						GradleTrackingFileIO.writePNG(generator, resized, to);
+					} catch (IOException e) {
+						if (generator.isStrictFileWrites())
+							throw new UncheckedIOException("failed to resize generated image", e);
+						generator.getLogger().warn("Failed to read image file for resizing", e);
+					}
+				} else if (generator.getWorkspace().getFolderManager().isFileInWorkspace(to)) {
+					BufferedImage resized = ImageUtils.toBufferedImage(
+							ImageUtils.resize(MinecraftImageGenerator.PLACEHOLDER, w, h));
+					GradleTrackingFileIO.writePNG(generator, resized, to);
+				}
+			}
+			case "provide_default_pack_icon" -> {
+				File to = new File(
+						GeneratorTokens.replaceTokens(generator.getWorkspace(), (String) ((Map<?, ?>) task).get("to")));
+				int w = Integer.parseInt(GeneratorTokens.replaceTokens(generator.getWorkspace(),
+						(String) ((Map<?, ?>) task).get("width")));
+				int h = Integer.parseInt(GeneratorTokens.replaceTokens(generator.getWorkspace(),
+						(String) ((Map<?, ?>) task).get("height")));
+				if (generator.getWorkspace().getFolderManager().isFileInWorkspace(to) && !to.isFile()) {
+					BufferedImage resized = ImageUtils.toBufferedImage(
+							ImageUtils.resize(MinecraftImageGenerator.PLACEHOLDER, w, h));
+					GradleTrackingFileIO.writePNG(generator, resized, to);
+				}
+			}
+			case "copy_models" -> {
+				File to = new File(
+						GeneratorTokens.replaceTokens(generator.getWorkspace(), (String) ((Map<?, ?>) task).get("to")));
+
+				if (generator.getWorkspace().getFolderManager().isFileInWorkspace(new File(to, "model.dummy"))) {
+					if (((Map<?, ?>) task).get("cleanupBeforeCopy") != null && Boolean.parseBoolean(
+							((Map<?, ?>) task).get("cleanupBeforeCopy").toString())) {
+						// empty directory to remove stale model files
+						GradleTrackingFileIO.emptyDirectory(generator, to);
+					}
+
+					List<Model> modelList = Model.getModels(generator.getWorkspace());
+
+					switch (((Map<?, ?>) task).get("type").toString()) {
+					case "OBJ":
+						for (Model model : modelList) {
+							if (model.getType() == Model.Type.OBJ) {
+								Arrays.stream(model.getFiles())
+										.limit(2) // we only copy fist two elements, we skip last one which is texture mapping if it exists
+										.forEach(f -> GradleTrackingFileIO.copyFile(generator, f,
+												new File(to, f.getName())));
+							}
+						}
+						break;
+					case "OBJ_inlinetextures":
+						String prefix = GeneratorTokens.replaceTokens(generator.getWorkspace(),
+								(String) ((Map<?, ?>) task).get("prefix"));
+						for (Model model : modelList) {
+							if (model.getType() == Model.Type.OBJ) {
+								Arrays.stream(model.getFiles())
+										.limit(2) // we only copy fist two elements, we skip last one which is texture mapping if it exists
+										.forEach(f -> ModelUtils.copyOBJorMTLApplyTextureMapping(
+												generator, f, new File(to, f.getName()), model, prefix));
+							}
+						}
+						break;
+					case "OBJ_referencetextures":
+						for (Model model : modelList) {
+							if (model.getType() == Model.Type.OBJ) {
+								Arrays.stream(model.getFiles())
+										.limit(2) // we only copy fist two elements, we skip last one which is texture mapping if it exists
+										.forEach(f -> ModelUtils.copyOBJorMTLApplyTextureReferences(generator, f,
+												new File(to, f.getName())));
+							}
+						}
+						break;
+					case "JSON":
+						for (Model model : modelList) {
+							if (model.getType() == Model.Type.JSON) {
+								GradleTrackingFileIO.copyFile(generator, model.getFile(),
+										new File(to, model.getFile().getName()));
+							}
+						}
+						break;
+					case "JSON_noinlinetextures":
+						for (Model model : modelList) {
+							if (model.getType() == Model.Type.JSON) {
+								String jsonorig = FileIO.readFileToString(model.getFile());
+								String notextures = ModelUtils.removeInlineTexturesSectionFromJSONModel(jsonorig);
+								GradleTrackingFileIO.writeFile(generator, notextures,
+										new File(to, model.getFile().getName()));
+							}
+						}
+						break;
+					case "BEDROCK":
+						for (Model model : modelList) {
+							if (model.getType() == Model.Type.BEDROCK) {
+								GradleTrackingFileIO.copyFile(generator, model.getFile(),
+										new File(to, model.getFile().getName()));
+							}
+						}
+						break;
+					case "JAVA_viatemplate":
+						String template = GeneratorTokens.replaceTokens(generator.getWorkspace(),
+								(String) ((Map<?, ?>) task).get("template"));
+						Map<File, String> javaFiles = new HashMap<>();
+						for (Model model : modelList) {
+							if (model.getType() == Model.Type.JAVA) {
+								String modelCode = FileIO.readFileToString(model.getFile());
+								try {
+									modelCode = generator.getTemplateGeneratorFromName("templates")
+											.generateFromTemplate(template, new HashMap<>(
+													Map.of("modelname", model.getReadableName(), "model", modelCode,
+															"modelregistryname",
+															RegistryNameFixer.fromCamelCase(model.getReadableName()))));
+								} catch (TemplateGeneratorException e) {
+									generator.getLogger()
+											.error("Failed to generate code for model: {}", model.getFile(), e);
+								}
+								javaFiles.put(new File(to, model.getReadableName() + ".java"), modelCode);
+							}
+						}
+						JavaWriter.batchWriteJavaToFile(generator.getWorkspace(), javaFiles, true, null);
+						break;
+					}
+				}
+			}
+			case "copy_model_animations" -> {
+				File to = new File(
+						GeneratorTokens.replaceTokens(generator.getWorkspace(), (String) ((Map<?, ?>) task).get("to")));
+
+				if (generator.getWorkspace().getFolderManager().isFileInWorkspace(new File(to, "animation.dummy"))) {
+					if (((Map<?, ?>) task).get("cleanupBeforeCopy") != null && Boolean.parseBoolean(
+							((Map<?, ?>) task).get("cleanupBeforeCopy").toString())) {
+						// empty directory to remove stale animation files
+						GradleTrackingFileIO.emptyDirectory(generator, to);
+					}
+
+					List<Animation> animations = Animation.getAnimations(generator.getWorkspace());
+
+					if (((Map<?, ?>) task).get("type").toString().equals("JAVA_viatemplate")) {
+						String template = GeneratorTokens.replaceTokens(generator.getWorkspace(),
+								(String) ((Map<?, ?>) task).get("template"));
+						Map<File, String> javaFiles = new HashMap<>();
+						for (Animation animation : animations) {
+							String animationCode = FileIO.readFileToString(animation.getFile());
+							try {
+								animationCode = generator.getTemplateGeneratorFromName("templates")
+										.generateFromTemplate(template, new HashMap<>(
+												Map.of("animationname", animation.getName(), "animation", animationCode,
+														"animationnameregistryname",
+														RegistryNameFixer.fromCamelCase(animation.getName()))));
+							} catch (TemplateGeneratorException e) {
+								generator.getLogger()
+										.error("Failed to generate code for animation: {}", animation.getFile(), e);
+							}
+							javaFiles.put(new File(to, animation.getName() + ".java"), animationCode);
+						}
+						JavaWriter.batchWriteJavaToFile(generator.getWorkspace(), javaFiles, true, null);
+					}
+				}
+			}
+			}
+			});
+		} catch (UncheckedIOException e) {
+			throw new GradleTrackingFileIO.StrictFileWriteException(e.getMessage(), e.getCause());
+		}
+	}
+
+}

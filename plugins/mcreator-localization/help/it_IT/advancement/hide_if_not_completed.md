@@ -1,0 +1,1 @@
+Questo parametro nasconde il progresso nella scheda finché non viene completato.

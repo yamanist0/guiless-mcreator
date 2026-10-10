@@ -1,0 +1,1 @@
+El jugador recibirá algunos objetos de la tabla de botín seleccionada definida en este campo cuando complete el logro.

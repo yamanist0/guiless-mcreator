@@ -1,0 +1,1 @@
+Este parâmetro determina a quantidade de dano de ataque infligida pelo seu item contra entidades.

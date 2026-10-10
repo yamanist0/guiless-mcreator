@@ -1,0 +1,1 @@
+Ez a paraméter határozza meg, hogy a tárgyad mennyi támadási sebzést okoz az entitásoknak.

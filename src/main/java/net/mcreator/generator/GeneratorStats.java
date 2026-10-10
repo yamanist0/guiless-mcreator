@@ -1,0 +1,326 @@
+/*
+ * MCreator (https://mcreator.net/)
+ * Copyright (C) 2020 Pylo and contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package net.mcreator.generator;
+
+import com.google.gson.Gson;
+import net.mcreator.blockly.data.BlocklyLoader;
+import net.mcreator.blockly.data.ExternalTrigger;
+import net.mcreator.blockly.data.ExternalTriggerLoader;
+import net.mcreator.blockly.data.ToolboxBlock;
+import net.mcreator.element.ModElementType;
+import net.mcreator.element.ModElementTypeLoader;
+import net.mcreator.minecraft.DataListEntry;
+import net.mcreator.minecraft.DataListLoader;
+import net.mcreator.plugin.PluginLoader;
+import net.mcreator.blockly.BlocklyEditorType;
+import net.mcreator.init.L10N;
+import net.mcreator.workspace.resources.TextureType;
+import net.mcreator.util.FilenameUtilsPatched;
+import net.mcreator.workspace.elements.VariableTypeLoader;
+
+import java.util.*;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+public class GeneratorStats {
+
+	private static final Pattern ftlFile = Pattern.compile(".*\\.ftl$");
+
+	private final Map<ModElementType<?>, CoverageStatus> modElementTypeCoverageInfo = new TreeMap<>(
+			Comparator.comparing(ModElementType::getRegistryName));
+	private final Map<String, Double> coverageInfo = new HashMap<>();
+	private final Map<String, CoverageStatus> baseCoverageInfo = new HashMap<>();
+
+	private final Status status;
+
+	private final Map<BlocklyEditorType, Set<String>> generatorBlocklyBlocks;
+
+	private final Map<BlocklyEditorType, Set<String>> generatorBlocklyTriggers;
+
+	private final Map<TextureType, CoverageStatus> textureCoverageInfo = new HashMap<>();
+
+	private final GeneratorConfiguration generatorConfiguration;
+
+	GeneratorStats(GeneratorConfiguration generatorConfiguration) {
+		this.generatorConfiguration = generatorConfiguration;
+		this.status = Status.valueOf(
+				generatorConfiguration.getRaw().get("status").toString().toUpperCase(Locale.ENGLISH));
+		this.generatorBlocklyBlocks = new LinkedHashMap<>();
+		this.generatorBlocklyTriggers = new HashMap<>();
+
+		// determine supported mod element types
+		for (ModElementType<?> type : ModElementTypeLoader.getAllModElementTypes()) {
+			Map<?, ?> definition = generatorConfiguration.getDefinitionsProvider().getModElementDefinition(type);
+			if (definition != null) {
+				if (definition.containsKey("field_inclusions") || definition.containsKey("field_exclusions")) {
+					modElementTypeCoverageInfo.put(type, CoverageStatus.PARTIAL);
+				} else {
+					modElementTypeCoverageInfo.put(type, CoverageStatus.FULL);
+				}
+			} else {
+				modElementTypeCoverageInfo.put(type, CoverageStatus.NONE);
+			}
+		}
+
+		Map<String, LinkedHashMap<String, DataListEntry>> datalistchache = DataListLoader.getCache();
+
+		// calculate the percentage of mappings/element lists supported
+		for (Map.Entry<String, LinkedHashMap<String, DataListEntry>> list : datalistchache.entrySet()) {
+			Set<String> definedElements = list.getValue().values().stream()
+					.filter(e -> generatorConfiguration.getGeneratorFlavor().supportsAPIs()
+							|| e.getRequiredAPIs() == null || e.getRequiredAPIs().isEmpty()).map(DataListEntry::getName)
+					.collect(Collectors.toSet());
+
+			if (definedElements.isEmpty())
+				continue;
+
+			Set<String> supportedElements = new HashSet<>();
+			Map<?, ?> mapping = generatorConfiguration.getMappingLoader().getMapping(list.getKey());
+			if (mapping != null) {
+				for (Object key : mapping.keySet()) {
+					supportedElements.add(key.toString());
+				}
+			}
+
+			Set<String> missingElements = new HashSet<>(definedElements);
+			missingElements.removeAll(supportedElements);
+
+			double supportedPercent =
+					(definedElements.size() - missingElements.size()) / (double) definedElements.size() * 100;
+			coverageInfo.put(list.getKey(), Math.min(supportedPercent, 100));
+		}
+
+		// load dummy values
+		BlocklyLoader.INSTANCE.getAllBlockLoaders().forEach((name, value) -> coverageInfo.put(name.registryName(), 0d));
+		BlocklyLoader.INSTANCE.getAllExternalTriggerLoaders().forEach((key, value) -> {
+			ExternalTriggerLoader loader = BlocklyLoader.INSTANCE.getExternalTriggerLoader(key);
+			coverageInfo.put(loader.getResourceFolder(), 0d);
+		});
+
+		// lazy load actual values
+		new Thread(() -> {
+			BlocklyLoader.INSTANCE.getAllBlockLoaders()
+					.forEach((name, value) -> addBlocklyFolder(generatorConfiguration, name));
+			BlocklyLoader.INSTANCE.getAllExternalTriggerLoaders()
+					.forEach((key, value) -> addBlocklyTriggerFolder(generatorConfiguration, key));
+		}, "GeneratorStats-Loader").start();
+
+		if (generatorConfiguration.getVariableTypes().getSupportedVariableTypes().isEmpty()) {
+			baseCoverageInfo.put("variables", CoverageStatus.NONE);
+		} else {
+			baseCoverageInfo.put("variables",
+					VariableTypeLoader.INSTANCE.getAllVariableTypes().stream().filter(e -> !e.isIgnoredByCoverage())
+							.allMatch(generatorConfiguration.getVariableTypes().getSupportedVariableTypes()::contains) ?
+							CoverageStatus.FULL :
+							CoverageStatus.PARTIAL);
+		}
+
+		baseCoverageInfo.put("model_java",
+				generatorConfiguration.getRaw().get("java_models") != null ? CoverageStatus.FULL : CoverageStatus.NONE);
+
+		String resourceTasksJSON = new Gson().toJson(generatorConfiguration.getResourceSetupTasks());
+		baseCoverageInfo.put("model_json",
+				resourceTasksJSON.contains("\"type\":\"JSON") ? CoverageStatus.FULL : CoverageStatus.NONE);
+		baseCoverageInfo.put("model_obj",
+				resourceTasksJSON.contains("\"type\":\"OBJ") ? CoverageStatus.FULL : CoverageStatus.NONE);
+		baseCoverageInfo.put("model_bedrock",
+				resourceTasksJSON.contains("\"type\":\"BEDROCK") ? CoverageStatus.FULL : CoverageStatus.NONE);
+
+		String sourceTasksJSON = new Gson().toJson(generatorConfiguration.getSourceSetupTasks());
+		baseCoverageInfo.put("model_animations_java",
+				(sourceTasksJSON.contains("\"type\":\"JAVA_viatemplate") && sourceTasksJSON.contains(
+						"\"task\":\"copy_model_animations")) ? CoverageStatus.FULL : CoverageStatus.NONE);
+
+		baseCoverageInfo.put("vanilla_resources",
+				generatorConfiguration.getSpecificRoot("vanilla_resources_jar") != null ?
+						CoverageStatus.FULL :
+						CoverageStatus.NONE);
+
+		CoverageStatus texturesCoverage = CoverageStatus.NONE;
+		int supportedTextureTypes = 0;
+		for (TextureType textureType : TextureType.getValuesForGenerator(generatorConfiguration)) {
+			if (generatorConfiguration.getSpecificRoot(textureType.getID() + "_textures_dir") != null) {
+				textureCoverageInfo.put(textureType, CoverageStatus.FULL);
+				texturesCoverage = CoverageStatus.PARTIAL;
+				supportedTextureTypes++;
+			}
+		}
+		if (supportedTextureTypes == TextureType.getValuesForGenerator(generatorConfiguration).length)
+			texturesCoverage = CoverageStatus.FULL;
+		baseCoverageInfo.put("textures", texturesCoverage);
+
+		baseCoverageInfo.put("i18n", generatorConfiguration.getLanguageFileSpecification().isEmpty() ?
+				CoverageStatus.NONE :
+				CoverageStatus.FULL);
+
+		baseCoverageInfo.put("tags",
+				generatorConfiguration.getTagsSpecification().isEmpty() ? CoverageStatus.NONE : CoverageStatus.FULL);
+
+		baseCoverageInfo.put("sounds", generatorConfiguration.getSpecificRoot("sounds_dir") == null ?
+				CoverageStatus.NONE :
+				CoverageStatus.FULL);
+
+		baseCoverageInfo.put("structures", generatorConfiguration.getSpecificRoot("structures_dir") == null ?
+				CoverageStatus.NONE :
+				CoverageStatus.FULL);
+	}
+
+	/**
+	 * Load all Blockly files of a {@link Generator} inside the provided folder.
+	 * Global triggers are loaded with their own method using {@link #addBlocklyTriggerFolder(GeneratorConfiguration, BlocklyEditorType)}.
+	 *
+	 * @param genConfig The current generator's config to use
+	 * @param type      The {@link BlocklyEditorType} we want to add a folder for
+	 */
+	public void addBlocklyFolder(GeneratorConfiguration genConfig, BlocklyEditorType type) {
+		Set<String> definedBlocks = BlocklyLoader.INSTANCE.getBlockLoader(type).getDefinedBlocks().values().stream()
+				.filter(b -> genConfig.getGeneratorFlavor().supportsAPIs() || b.getRequiredAPIs() == null
+						|| b.getRequiredAPIs().isEmpty()).map(ToolboxBlock::getMachineName).collect(Collectors.toSet());
+
+		if (definedBlocks.isEmpty())
+			return;
+
+		Set<String> supportedBlocks = new HashSet<>();
+		for (String path : genConfig.getGeneratorPaths(type.registryName())) {
+			supportedBlocks.addAll(PluginLoader.INSTANCE.getResources(path.replace('/', '.'), ftlFile).stream()
+					.map(FilenameUtilsPatched::getBaseName).map(FilenameUtilsPatched::getBaseName)
+					.filter(e -> !e.startsWith("_")).collect(Collectors.toSet()));
+		}
+
+		generatorBlocklyBlocks.put(type, supportedBlocks);
+
+		// Determine which blocks from defined blocks we are missing
+		Set<String> missingBlocks = new HashSet<>(definedBlocks);
+		missingBlocks.removeAll(supportedBlocks);
+
+		double supportedPercent = (definedBlocks.size() - missingBlocks.size()) / (double) definedBlocks.size() * 100;
+		coverageInfo.put(type.registryName(), Math.min(supportedPercent, 100));
+	}
+
+	public void addBlocklyTriggerFolder(GeneratorConfiguration genConfig, BlocklyEditorType type) {
+		ExternalTriggerLoader loader = BlocklyLoader.INSTANCE.getExternalTriggerLoader(type);
+		Set<String> definedTriggers = loader.getExternalTriggers().stream()
+				.filter(t -> genConfig.getGeneratorFlavor().supportsAPIs() || t.required_apis == null
+						|| t.required_apis.isEmpty()).map(ExternalTrigger::getID).collect(Collectors.toSet());
+
+		if (definedTriggers.isEmpty())
+			return;
+
+		Set<String> supportedTriggers = generatorBlocklyTriggers.computeIfAbsent(type, k -> new HashSet<>());
+		for (String path : genConfig.getGeneratorPaths(loader.getResourceFolder())) {
+			supportedTriggers.addAll(PluginLoader.INSTANCE.getResources(path.replace('/', '.'), ftlFile).stream()
+					.map(FilenameUtilsPatched::getBaseName).map(FilenameUtilsPatched::getBaseName)
+					.collect(Collectors.toSet()));
+		}
+
+		// Determine which triggers from defined triggers we are missing
+		Set<String> missingTriggers = new HashSet<>(definedTriggers);
+		missingTriggers.removeAll(supportedTriggers);
+
+		double supportedPercent =
+				(definedTriggers.size() - missingTriggers.size()) / (double) definedTriggers.size() * 100;
+		coverageInfo.put(loader.getResourceFolder(), Math.min(supportedPercent, 100));
+	}
+
+	public Map<BlocklyEditorType, Set<String>> getGeneratorBlocklyBlocks() {
+		return generatorBlocklyBlocks;
+	}
+
+	public Set<String> getBlocklyBlocks(BlocklyEditorType type) {
+		return generatorBlocklyBlocks.get(type);
+	}
+
+	public Map<BlocklyEditorType, Set<String>> getGeneratorBlocklyTriggers() {
+		return generatorBlocklyTriggers;
+	}
+
+	public Set<String> getBlocklyTriggers(BlocklyEditorType type) {
+		return generatorBlocklyTriggers.get(type);
+	}
+
+	public Map<ModElementType<?>, CoverageStatus> getModElementTypeCoverageInfo() {
+		return modElementTypeCoverageInfo;
+	}
+
+	public List<ModElementType<?>> getSupportedModElementTypes() {
+		return modElementTypeCoverageInfo.entrySet().stream().filter(e -> e.getValue() != CoverageStatus.NONE)
+				.map(Map.Entry::getKey).sorted(Comparator.comparing(ModElementType::getReadableName))
+				.collect(Collectors.toList());
+	}
+
+	public Map<String, Double> getCoverageInfo() {
+		return coverageInfo;
+	}
+
+	public Map<String, CoverageStatus> getBaseCoverageInfo() {
+		return baseCoverageInfo;
+	}
+
+	public boolean hasBaseCoverageAny(String... features) {
+		for (String feature : features) {
+			if (hasBaseCoverage(feature))
+				return true;
+		}
+		return false;
+	}
+
+	public boolean hasBaseCoverage(String feature) {
+		CoverageStatus status = baseCoverageInfo.get(feature);
+		return status != null && status != CoverageStatus.NONE;
+	}
+
+	public Map<TextureType, CoverageStatus> getTextureCoverageInfo() {
+		return textureCoverageInfo;
+	}
+
+	public Status getStatus() {
+		return status;
+	}
+
+	public GeneratorConfiguration getAssociatedGeneratorConfiguration() {
+		return generatorConfiguration;
+	}
+
+	public enum CoverageStatus {
+		FULL, PARTIAL, NONE
+	}
+
+	// @formatter:off
+	public enum Status {
+
+		DEPRECATED("dialog.generator_selector.generator_status.deprecated"),
+		DEV("dialog.generator_selector.generator_status.dev"),
+		EXPERIMENTAL("dialog.generator_selector.generator_status.experimental"),
+		LEGACY("dialog.generator_selector.generator_status.legacy"),
+		LTS("dialog.generator_selector.generator_status.lts"),
+		STABLE("dialog.generator_selector.generator_status.stable");
+
+		private final String key;
+
+		Status(String key) {
+			this.key = key;
+		}
+
+		public String getName() {
+			return L10N.t(key);
+		}
+
+	}
+	// @formatter:on
+}

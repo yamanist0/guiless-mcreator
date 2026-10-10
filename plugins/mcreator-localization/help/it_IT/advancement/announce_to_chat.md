@@ -1,0 +1,1 @@
+Invia un messaggio nella chat quando il giocatore completa il progresso.

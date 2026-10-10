@@ -1,0 +1,1 @@
+$origin = origin.atY(${input$height}.sample(context.random(), new WorldGenerationContext(context.chunkGenerator(), context.level())));$

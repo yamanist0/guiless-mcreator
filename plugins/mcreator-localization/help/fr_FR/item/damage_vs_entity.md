@@ -1,0 +1,1 @@
+Ce paramètre détermine les dégâts d'attaque que votre item infligera aux entités.

@@ -1,0 +1,91 @@
+/*
+ * MCreator (https://mcreator.net/)
+ * Copyright (C) 2012-2020, Pylo
+ * Copyright (C) 2020-2023, Pylo, opensource contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package net.mcreator.element.types;
+
+import net.mcreator.element.BaseType;
+import net.mcreator.element.GeneratableElement;
+import net.mcreator.element.parts.MItemBlock;
+import net.mcreator.element.parts.Sound;
+import net.mcreator.element.parts.procedure.Procedure;
+import net.mcreator.element.types.interfaces.ICommonType;
+import net.mcreator.element.types.interfaces.IEntityWithModel;
+import net.mcreator.element.types.interfaces.Numeric;
+import net.mcreator.minecraft.MCItem;
+import net.mcreator.workspace.resources.TextureType;
+import net.mcreator.util.image.ImageUtils;
+import net.mcreator.workspace.elements.ModElement;
+import net.mcreator.workspace.references.TextureReference;
+import net.mcreator.workspace.resources.Model;
+
+import javax.annotation.Nullable;
+import java.awt.image.BufferedImage;
+import java.util.Collection;
+import java.util.Collections;
+
+@SuppressWarnings("unused") public class Projectile extends GeneratableElement
+		implements IEntityWithModel, ICommonType {
+
+	public MItemBlock projectileItem;
+	public boolean showParticles;
+	public Sound actionSound;
+	public boolean igniteFire;
+	public boolean disableGravity;
+	public boolean disableDiscarding;
+	@Numeric(init = 1, min = 0, max = 100, step = 0.1) public double power;
+	@Numeric(init = 5, min = 0, max = 10000, step = 0.1) public double damage;
+	@Numeric(init = 5, min = 0, max = 500, step = 1) public int knockback;
+	public String entityModel;
+	@TextureReference(TextureType.ENTITY) public String customModelTexture;
+
+	@Numeric(init = 0.5, min = 0, max = 1024, step = 0.1) public double modelWidth;
+	@Numeric(init = 0.5, min = 0, max = 1024, step = 0.1) public double modelHeight;
+
+	public Procedure onHitsBlock;
+	public Procedure onHitsPlayer;
+	public Procedure onHitsEntity;
+	public Procedure onFlyingTick;
+
+	private Projectile() {
+		this(null);
+	}
+
+	public Projectile(ModElement element) {
+		super(element);
+
+		this.modelWidth = 0.5f;
+		this.modelHeight = 0.5f;
+	}
+
+	@Override @Nullable public Model getEntityModel() {
+		Model.Type modelType = Model.Type.BUILTIN;
+		if (!entityModel.equals("Default"))
+			modelType = Model.Type.JAVA;
+		return Model.getModelByParams(getModElement().getWorkspace(), entityModel, modelType);
+	}
+
+	@Override public BufferedImage generateModElementPicture() {
+		return MCItem.getBlockIconBasedOnName(getModElement().getWorkspace(), projectileItem.getUnmappedValue());
+	}
+
+	@Override public Collection<BaseType> getBaseTypesProvided() {
+		return Collections.singletonList(BaseType.ENTITY);
+	}
+
+}

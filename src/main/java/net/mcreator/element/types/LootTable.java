@@ -1,0 +1,93 @@
+/*
+ * MCreator (https://mcreator.net/)
+ * Copyright (C) 2020 Pylo and contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package net.mcreator.element.types;
+
+import net.mcreator.element.NamespacedGeneratableElement;
+import net.mcreator.element.parts.MItemBlock;
+import net.mcreator.element.types.interfaces.LimitedOptions;
+import net.mcreator.element.types.interfaces.Numeric;
+import net.mcreator.workspace.elements.ModElement;
+import net.mcreator.workspace.references.ModElementReference;
+
+import javax.annotation.Nonnull;
+import java.util.ArrayList;
+import java.util.List;
+
+@SuppressWarnings({ "unused", "NotNullFieldNotInitialized" }) public class LootTable
+		extends NamespacedGeneratableElement {
+
+	@LimitedOptions({ "Block", "Entity", "Generic", "Chest", "Fishing", "Empty", "Advancement reward", "Gift", "Barter",
+			"Archaeology" }) @Nonnull public String type;
+
+	@ModElementReference public List<Pool> pools;
+
+	// raw JSON passthrough used by the ModStudio AI frontend (kept alongside the structured pools)
+	public String jsonCode;
+
+	private LootTable() {
+		this(null);
+	}
+
+	public LootTable(ModElement element) {
+		super(element);
+
+		this.pools = new ArrayList<>();
+	}
+
+	public static class Pool {
+		@Numeric(init = 1, min = 0, max = 64000, step = 1, allowMinMaxEqual = true) public int minrolls, maxrolls;
+		@Numeric(init = 1, min = 0, max = 64000, step = 1, allowMinMaxEqual = true)
+		public int minbonusrolls, maxbonusrolls;
+		public boolean hasbonusrolls;
+
+		@ModElementReference public List<Entry> entries;
+
+		public Pool() {
+			this.entries = new ArrayList<>();
+		}
+
+		public static class Entry {
+
+			@LimitedOptions({ "item" }) public String type = "item";
+			public MItemBlock item;
+
+			@Numeric(init = 1, min = 0, max = 64000, step = 1) public int weight;
+
+			@Numeric(init = 1, min = 0, max = 64000, step = 1, allowMinMaxEqual = true) public int minCount, maxCount;
+
+			@Numeric(init = 0, min = 0, max = 64000, step = 1, allowMinMaxEqual = true)
+			public int minEnchantmentLevel, maxEnchantmentLevel;
+
+			public boolean affectedByFortune, explosionDecay;
+
+			@LimitedOptions({ "Ignore silk touch", "Only with silk touch", "Only without silk touch" })
+			public int silkTouchMode;
+
+			// initiate default values
+			public Entry() {
+				this.weight = 1;
+				this.minCount = 1;
+				this.maxCount = 1;
+			}
+
+		}
+
+	}
+
+}

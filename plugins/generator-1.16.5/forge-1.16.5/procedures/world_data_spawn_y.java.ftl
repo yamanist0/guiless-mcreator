@@ -1,0 +1,1 @@
+/*@int*/(world.getWorldInfo().getSpawnY())

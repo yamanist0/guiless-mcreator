@@ -1,0 +1,1 @@
+Las entidades seleccionadas aquí tendrán este atributo presente y configurados en su valor por defecto cuando spawnean.

@@ -1,0 +1,200 @@
+/*
+ * MCreator (https://mcreator.net/)
+ * Copyright (C) 2020 Pylo and contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package net.mcreator.element.types;
+
+import net.mcreator.element.GeneratableElement;
+import net.mcreator.element.parts.AttributeModifierEntry;
+import net.mcreator.element.parts.MItemBlock;
+import net.mcreator.element.parts.TabEntry;
+import net.mcreator.element.parts.TextureHolder;
+import net.mcreator.element.parts.procedure.LogicProcedure;
+import net.mcreator.element.parts.procedure.Procedure;
+import net.mcreator.element.parts.procedure.StringListProcedure;
+import net.mcreator.element.types.interfaces.*;
+import net.mcreator.generator.mapping.MappableElement;
+import net.mcreator.minecraft.MCItem;
+import net.mcreator.minecraft.states.PropertyData;
+import net.mcreator.minecraft.states.StateMap;
+import net.mcreator.workspace.resources.TextureType;
+import net.mcreator.util.image.ImageUtils;
+import net.mcreator.workspace.elements.ModElement;
+import net.mcreator.workspace.references.ModElementReference;
+import net.mcreator.workspace.references.TextureReference;
+import net.mcreator.workspace.resources.Model;
+import net.mcreator.workspace.resources.TexturedModel;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.awt.image.BufferedImage;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@SuppressWarnings({ "unused", "NotNullFieldNotInitialized" }) public class Tool extends GeneratableElement
+		implements IItem, IItemWithModel, ITabContainedElement, ISpecialInfoHolder, IItemWithTexture {
+
+	@LimitedOptions({ "Pickaxe", "Axe", "Sword", "Spade", "Hoe", "Shield", "Shears", "Fishing rod", "Special",
+			"MultiTool" }) @Nonnull public String toolType;
+
+	public int renderType;
+	public int blockingRenderType;
+	@TextureReference(TextureType.ITEM) public TextureHolder texture;
+	@Nonnull public String customModelName;
+	@Nonnull public String blockingModelName;
+	@TextureReference(TextureType.ITEM) @Nullable public TextureHolder guiTexture;
+
+	public String name;
+	@LimitedOptions({ "COMMON", "UNCOMMON", "RARE", "EPIC" }) public String rarity;
+	public StringListProcedure specialInformation;
+	@ModElementReference public List<TabEntry> creativeTabs;
+	@Numeric(init = 4, min = 0, max = 128000, step = 0.5) public double efficiency;
+	@Numeric(init = 1, min = 0, max = 100, step = 0.1) public double attackSpeed;
+	@Numeric(init = 2, min = 1, max = 128000, step = 1) public int enchantability;
+	@Numeric(init = 4, min = 0, max = 128000, step = 0.1) public double damageVsEntity;
+	@Numeric(init = 100, min = 0, max = 128000, step = 1) public int usageCount;
+	public LogicProcedure glowCondition;
+	@ModElementReference public List<MItemBlock> repairItems;
+	public boolean immuneToFire;
+
+	@LimitedOptions({ "WOOD", "STONE", "IRON", "DIAMOND", "GOLD", "NETHERITE" }) public String blockDropsTier;
+	public Procedure additionalDropCondition;
+
+	@ModElementReference public List<MItemBlock> blocksAffected;
+
+	@ModElementReference public List<AttributeModifierEntry> attributeModifiers;
+
+	public boolean stayInGridWhenCrafting;
+	public boolean damageOnCrafting;
+
+	public Procedure onRightClickedInAir;
+	public Procedure onRightClickedOnBlock;
+	public Procedure onCrafted;
+	public Procedure onEntityHitWith;
+	public Procedure onItemInInventoryTick;
+	public Procedure onItemInUseTick;
+	public Procedure onBlockDestroyedWithTool;
+	public Procedure onEntitySwing;
+	public Procedure onDroppedByPlayer;
+	public Procedure onItemEntityDestroyed;
+
+	private Tool() {
+		this(null);
+	}
+
+	public Tool(ModElement element) {
+		super(element);
+
+		this.rarity = "COMMON";
+		this.creativeTabs = new ArrayList<>();
+		this.repairItems = new ArrayList<>();
+		this.blocksAffected = new ArrayList<>();
+		this.attributeModifiers = new ArrayList<>();
+
+		this.attackSpeed = 2.8;
+
+		this.blockingModelName = "Normal blocking";
+
+		this.blockDropsTier = "WOOD";
+	}
+
+	@Override public BufferedImage generateModElementPicture() {
+		if (hasGUITexture()) {
+			return ImageUtils.resizeAndCrop(guiTexture.getImage(TextureType.ITEM), 32);
+		} else {
+			return ImageUtils.resizeAndCrop(texture.getImage(TextureType.ITEM), 32);
+		}
+	}
+
+	public boolean hasGUITexture() {
+		return guiTexture != null && !guiTexture.isEmpty();
+	}
+
+	@Override public Model getItemModel() {
+		Model.Type modelType = Model.Type.BUILTIN;
+		if (renderType == 1)
+			modelType = Model.Type.JSON;
+		else if (renderType == 2)
+			modelType = Model.Type.OBJ;
+		return Model.getModelByParams(getModElement().getWorkspace(), customModelName, modelType);
+	}
+
+	public Model getBlockingModel() {
+		Model.Type modelType = Model.Type.BUILTIN;
+		if (blockingRenderType == 1)
+			modelType = Model.Type.JSON;
+		else if (blockingRenderType == 2)
+			modelType = Model.Type.OBJ;
+		return Model.getModelByParams(getModElement().getWorkspace(), blockingModelName, modelType);
+	}
+
+	@Override public Map<String, TextureHolder> getTextureMap() {
+		Model model = getItemModel();
+		if (model instanceof TexturedModel && ((TexturedModel) model).getTextureMapping() != null)
+			return ((TexturedModel) model).getTextureMapping().getTextureMap();
+		return new HashMap<>();
+	}
+
+	public Map<String, TextureHolder> getBlockingTextureMap() {
+		Model model = getBlockingModel();
+		if (model instanceof TexturedModel && ((TexturedModel) model).getTextureMapping() != null)
+			return ((TexturedModel) model).getTextureMapping().getTextureMap();
+		return new HashMap<>();
+	}
+
+	public List<Item.StateEntry> getModels() {
+		if (toolType.equals("Shield")) {
+			Item.StateEntry model = new Item.StateEntry();
+			model.setWorkspace(getModElement().getWorkspace());
+			model.renderType = blockingRenderType;
+			model.texture = texture;
+			model.customModelName = blockingModelName;
+
+			model.stateMap = new StateMap();
+			model.stateMap.put(new PropertyData.LogicType("blocking"), true);
+
+			return Collections.singletonList(model);
+		} else {
+			return Collections.emptyList();
+		}
+	}
+
+	@Override public List<TabEntry> getCreativeTabs() {
+		return creativeTabs;
+	}
+
+	@Override public TextureHolder getTexture() {
+		return texture;
+	}
+
+	@Override public List<MCItem> providedMCItems() {
+		return List.of(new MCItem.Custom(this.getModElement(), null, "item"));
+	}
+
+	@Override public List<MCItem> getCreativeTabItems() {
+		return providedMCItems();
+	}
+
+	@Override public StringListProcedure getSpecialInfoProcedure() {
+		return specialInformation;
+	}
+
+	public List<String> getRepairItemsAsStringList() {
+		return this.repairItems.stream().map(MappableElement::getUnmappedValue).collect(Collectors.toList());
+	}
+
+}

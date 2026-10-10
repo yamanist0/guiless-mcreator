@@ -1,0 +1,1 @@
+/*@float*/(world.getWorldInfo().getDayTime())

@@ -1,0 +1,80 @@
+/*
+ * MCreator (https://mcreator.net/)
+ * Copyright (C) 2020 Pylo and contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package net.mcreator.generator;
+
+import org.apache.commons.io.FilenameUtils;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.io.File;
+
+public record GeneratorFile(GeneratorTemplate source, @Nonnull Writer writer, String contents) {
+
+	public File getFile() {
+		return source.getFile();
+	}
+
+	public String getUsercodeComment() {
+		if (writer == Writer.JAVA || writer == Writer.JS)
+			return "//";
+		return source.getUsercodeComment();
+	}
+
+	@Override public boolean equals(Object o) {
+		if (this == o)
+			return true;
+		if (o == null || getClass() != o.getClass())
+			return false;
+		return source.equals(((GeneratorFile) o).source);
+	}
+
+	@Override public int hashCode() {
+		return source.hashCode();
+	}
+
+	@Nonnull @Override public String toString() {
+		return source.getFile().toString();
+	}
+
+	public enum Writer {
+
+		JAVA, JSON, FILE, JS;
+
+		public static Writer fromString(@Nullable String string, @Nonnull File file) {
+			if (string == null) {
+				switch (FilenameUtils.getExtension(file.getName())) {
+				case "java" -> string = "java";
+				case "json" -> string = "json";
+				case "js" -> string = "js";
+				default -> string = "file";
+				}
+			}
+
+			return switch (string) {
+				case "java" -> JAVA;
+				case "json" -> JSON;
+				case "file" -> FILE;
+				case "js" -> JS;
+				default -> throw new IllegalStateException("Unexpected value: " + string);
+			};
+		}
+
+	}
+
+}

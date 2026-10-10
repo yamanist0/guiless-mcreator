@@ -1,0 +1,74 @@
+/*
+ * MCreator (https://mcreator.net/)
+ * Copyright (C) 2012-2020, Pylo
+ * Copyright (C) 2020-2021, Pylo, opensource contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package net.mcreator.integration.ui;
+
+import net.mcreator.generator.Generator;
+import net.mcreator.generator.GeneratorConfiguration;
+import net.mcreator.generator.GeneratorFlavor;
+import net.mcreator.integration.IntegrationTestSetup;
+import net.mcreator.integration.TestWorkspaceDataProvider;
+import net.mcreator.ui.MCreator;
+import net.mcreator.ui.dialogs.imageeditor.*;
+import net.mcreator.ui.views.editor.image.ImageMakerView;
+import net.mcreator.ui.views.editor.image.layer.Layer;
+import net.mcreator.ui.views.editor.image.tool.component.ColorSelector;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.awt.*;
+import java.io.File;
+
+import static org.junit.jupiter.api.Assertions.fail;
+
+@ExtendWith(IntegrationTestSetup.class) public class ImageMakerTest {
+
+	private static MCreator mcreator;
+
+	@BeforeAll public static void initTest(@TempDir File tempDir) {
+		GeneratorConfiguration generatorConfiguration = GeneratorConfiguration.getRecommendedGeneratorForBaseLanguage(
+				Generator.GENERATOR_CACHE.values(), GeneratorFlavor.BaseLanguage.JAVA);
+
+		if (generatorConfiguration == null)
+			fail("Failed to load any Forge flavored generator for this unit test");
+
+		mcreator = MCreator.create(null,
+				TestWorkspaceDataProvider.createTestWorkspace(tempDir, generatorConfiguration, false, false, null));
+	}
+
+	@Test public void testImageMaker() throws Throwable {
+		ImageMakerView imv = new ImageMakerView(mcreator);
+		imv.newImage(new Layer(100, 100, 0, 0, "Layer", Color.red));
+
+		UITestUtil.waitUntilWindowIsOpen(mcreator, () -> new DesaturateDialog(mcreator, imv.getCanvas(), null, null));
+		UITestUtil.waitUntilWindowIsOpen(mcreator, () -> new FromTemplateDialog(mcreator, imv.getCanvas(), null));
+		UITestUtil.waitUntilWindowIsOpen(mcreator, () -> new HSVNoiseDialog(mcreator, imv.getCanvas(), null, null));
+		UITestUtil.waitUntilWindowIsOpen(mcreator, () -> new NewImageDialog(mcreator));
+		UITestUtil.waitUntilWindowIsOpen(mcreator, () -> new NewLayerDialog(mcreator, imv.getCanvas()));
+		UITestUtil.waitUntilWindowIsOpen(mcreator,
+				() -> new RecolorDialog(mcreator, imv.getCanvas(), null, new ColorSelector(mcreator), null));
+		UITestUtil.waitUntilWindowIsOpen(mcreator, () -> new ResizeCanvasDialog(mcreator, imv.getCanvas()));
+		UITestUtil.waitUntilWindowIsOpen(mcreator,
+				() -> new ResizeDialog(mcreator, imv.getCanvas(), imv.getToolPanel().getCurrentTool().getLayer(),
+						null));
+	}
+
+}

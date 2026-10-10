@@ -1,0 +1,1 @@
+Puedes elegir una función para ejecutar cuando el jugador complete el logro con este parámetro.

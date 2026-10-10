@@ -1,0 +1,2 @@
+Este parámetro controla si el modelo personalizado de Java soporta translucencia en su renderizado.
+Enciéndelo **solo** para modelos hechos para mostrar texturas translucentes, ya que activarlo de todas maneras, reducirá el rendimiento del renderizado.

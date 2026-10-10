@@ -1,0 +1,1 @@
+Ce paramètre fera que la dimension aura un ciel illuminé

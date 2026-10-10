@@ -1,0 +1,1 @@
+Ez az eszköz típusa.

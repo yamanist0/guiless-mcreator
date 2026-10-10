@@ -1,0 +1,2 @@
+<#include "mcelements.ftl">
+(world.getChunkProvider().chunkExists(SectionPos.toChunk(MathHelper.floor(${opt.removeParentheses(input$x)})), SectionPos.toChunk(MathHelper.floor(${opt.removeParentheses(input$z)}))))

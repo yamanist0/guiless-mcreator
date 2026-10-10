@@ -1,0 +1,1 @@
+$origin = origin.offset(${input$xz}.sample(context.random()), ${input$y}.sample(context.random()), ${input$xz}.sample(context.random()));$

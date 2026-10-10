@@ -1,0 +1,1 @@
+Der Werkzeugtyp dieses Werkzeugs.

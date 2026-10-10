@@ -1,0 +1,194 @@
+/*
+ * MCreator (https://mcreator.net/)
+ * Copyright (C) 2020 Pylo and contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package net.mcreator.element.types;
+
+import net.mcreator.element.NamespacedGeneratableElement;
+import net.mcreator.element.parts.MItemBlock;
+import net.mcreator.element.types.interfaces.LimitedOptions;
+import net.mcreator.element.types.interfaces.NonNullIf;
+import net.mcreator.element.types.interfaces.Numeric;
+import net.mcreator.minecraft.MinecraftImageGenerator;
+import net.mcreator.minecraft.RegistryNameFixer;
+import net.mcreator.workspace.elements.ModElement;
+import net.mcreator.workspace.references.ModElementReference;
+
+import javax.annotation.Nonnull;
+import java.awt.image.BufferedImage;
+import java.util.*;
+
+@SuppressWarnings({ "unused", "NotNullFieldNotInitialized" }) public class Recipe extends NamespacedGeneratableElement {
+
+	@LimitedOptions({ "Crafting", "Smelting", "Brewing", "Blasting", "Smoking", "Stone cutting", "Campfire cooking",
+			"Smithing" }) @Nonnull public String recipeType;
+
+	@Numeric(init = 1, min = 1, max = 99, step = 1, optional = true) public int recipeRetstackSize;
+	public String group;
+	@ModElementReference public List<MItemBlock> unlockingItems;
+
+	// Cooking recipes common fields
+	@LimitedOptions({ "MISC", "FOOD", "BLOCKS" }) public String cookingBookCategory;
+	@Numeric(init = 1.0, min = 0, max = 256, step = 0.1) public double xpReward;
+	@Numeric(init = 200, min = 0, max = 1000000, step = 1) public int cookingTime;
+
+	// Crafting recipe
+	@LimitedOptions({ "MISC", "BUILDING", "REDSTONE", "EQUIPMENT" }) public String craftingBookCategory;
+	public boolean recipeShapeless;
+	@NonNullIf("recipeType %= Crafting") @ModElementReference public MItemBlock[] recipeSlots;
+	@NonNullIf("recipeType %= Crafting") public MItemBlock recipeReturnStack;
+
+	// Smelting recipe
+	@NonNullIf("recipeType %= Smelting") public MItemBlock smeltingInputStack;
+	@NonNullIf("recipeType %= Smelting") public MItemBlock smeltingReturnStack;
+
+	// Blasting recipe
+	@NonNullIf("recipeType %= Blasting") public MItemBlock blastingInputStack;
+	@NonNullIf("recipeType %= Blasting") public MItemBlock blastingReturnStack;
+
+	// Smoking recipe
+	@NonNullIf("recipeType %= Smoking") public MItemBlock smokingInputStack;
+	@NonNullIf("recipeType %= Smoking") public MItemBlock smokingReturnStack;
+
+	// Stone cutting recipe
+	@NonNullIf("recipeType %= Stone cutting") public MItemBlock stoneCuttingInputStack;
+	@NonNullIf("recipeType %= Stone cutting") public MItemBlock stoneCuttingReturnStack;
+
+	// Campfire cooking recipe
+	@NonNullIf("recipeType %= Campfire cooking") public MItemBlock campfireCookingInputStack;
+	@NonNullIf("recipeType %= Campfire cooking") public MItemBlock campfireCookingReturnStack;
+
+	// Smithing recipe
+	@NonNullIf("recipeType %= Smithing") public MItemBlock smithingInputStack;
+	@NonNullIf("recipeType %= Smithing") public MItemBlock smithingInputAdditionStack;
+	public MItemBlock smithingInputTemplateStack;
+	@NonNullIf("recipeType %= Smithing") public MItemBlock smithingReturnStack;
+
+	// Brewing recipe
+	@NonNullIf("recipeType %= Brewing") public MItemBlock brewingInputStack;
+	@NonNullIf("recipeType %= Brewing") public MItemBlock brewingIngredientStack;
+	@NonNullIf("recipeType %= Brewing") public MItemBlock brewingReturnStack;
+
+	private Recipe() {
+		this(null);
+	}
+
+	public Recipe(ModElement element) {
+		super(element);
+
+		this.recipeRetstackSize = 1;
+		this.namespace = "mod";
+
+		this.cookingTime = 200;
+
+		this.cookingBookCategory = "MISC";
+		this.craftingBookCategory = "MISC";
+
+		this.unlockingItems = new ArrayList<>();
+	}
+
+	@Override public void setModElement(ModElement element) {
+		super.setModElement(element);
+
+		// for workspaces before 2020.1
+		if (this.name == null)
+			this.name = RegistryNameFixer.fromCamelCase(element.getName());
+	}
+
+	@Override public BufferedImage generateModElementPicture() {
+		BufferedImage mod = null;
+		if ("Crafting".equals(recipeType) && !recipeReturnStack.isEmpty()) {
+			mod = MinecraftImageGenerator.Preview.generateRecipePreviewPicture(getModElement().getWorkspace(),
+					recipeSlots, recipeReturnStack);
+		} else if ("Smelting".equals(recipeType) && !smeltingInputStack.isEmpty() && !smeltingReturnStack.isEmpty()) {
+			mod = MinecraftImageGenerator.Preview.generateRecipePreviewPicture(getModElement().getWorkspace(),
+					new MItemBlock[] { smeltingInputStack }, smeltingReturnStack);
+		} else if ("Blasting".equals(recipeType) && !blastingInputStack.isEmpty() && !blastingReturnStack.isEmpty()) {
+			mod = MinecraftImageGenerator.Preview.generateBlastingPreviewPicture(getModElement().getWorkspace(),
+					blastingInputStack, blastingReturnStack);
+		} else if ("Smoking".equals(recipeType) && !smokingInputStack.isEmpty() && !smokingReturnStack.isEmpty()) {
+			mod = MinecraftImageGenerator.Preview.generateSmokingPreviewPicture(getModElement().getWorkspace(),
+					smokingInputStack, smokingReturnStack);
+		} else if ("Stone cutting".equals(recipeType) && !stoneCuttingInputStack.isEmpty()
+				&& !stoneCuttingReturnStack.isEmpty()) {
+			mod = MinecraftImageGenerator.Preview.generateStoneCuttingPreviewPicture(getModElement().getWorkspace(),
+					stoneCuttingInputStack, stoneCuttingReturnStack);
+		} else if ("Campfire cooking".equals(recipeType) && !campfireCookingInputStack.isEmpty()
+				&& !campfireCookingReturnStack.isEmpty()) {
+			mod = MinecraftImageGenerator.Preview.generateCampfirePreviewPicture(getModElement().getWorkspace(),
+					campfireCookingInputStack, campfireCookingReturnStack);
+		} else if ("Smithing".equals(recipeType) && !smithingInputStack.isEmpty()
+				&& !smithingInputAdditionStack.isEmpty() && !smithingReturnStack.isEmpty()) {
+			mod = MinecraftImageGenerator.Preview.generateSmithingPreviewPicture(getModElement().getWorkspace(),
+					smithingInputTemplateStack, smithingInputStack, smithingInputAdditionStack);
+		} else if ("Brewing".equals(recipeType) && !brewingInputStack.isEmpty() && !brewingIngredientStack.isEmpty()
+				&& !brewingReturnStack.isEmpty()) {
+			mod = MinecraftImageGenerator.Preview.generateBrewingPreviewPicture(getModElement().getWorkspace(),
+					brewingInputStack, brewingIngredientStack, brewingReturnStack);
+		}
+		return mod;
+	}
+
+	public MItemBlock[][] getOptimisedRecipe() {
+		MItemBlock[][] mtx = { { recipeSlots[0], recipeSlots[1], recipeSlots[2] },
+				{ recipeSlots[3], recipeSlots[4], recipeSlots[5] },
+				{ recipeSlots[6], recipeSlots[7], recipeSlots[8] } };
+
+		// determine recipe matrix edges
+		int cmin = mtx[0].length;
+		int rmin = mtx.length;
+		int cmax = -1;
+		int rmax = -1;
+		for (int r = 0; r < mtx.length; r++) {
+			for (int c = 0; c < mtx[0].length; c++) {
+				if (!mtx[r][c].isEmpty()) {
+					if (cmin > c)
+						cmin = c;
+					if (cmax < c)
+						cmax = c;
+					if (rmin > r)
+						rmin = r;
+					if (rmax < r)
+						rmax = r;
+				}
+			}
+		}
+
+		// trim array size to the smallest possible
+		MItemBlock[][] result = new MItemBlock[rmax - rmin + 1][];
+		for (int r = rmin, i = 0; r <= rmax; r++, i++)
+			result[i] = Arrays.copyOfRange(mtx[r], cmin, cmax + 1);
+		return result;
+	}
+
+	public Map<MItemBlock, String> getPatternKeys() {
+		Map<MItemBlock, String> keys = new LinkedHashMap<>();
+		int idx = 0;
+		for (MItemBlock slot : recipeSlots) {
+			if (!slot.isEmpty() && !keys.containsKey(slot)) {
+				keys.put(slot, Character.toString((char) ('a' + idx)));
+				idx++;
+			}
+		}
+		return keys;
+	}
+
+	public boolean hasAdvancement() {
+		return !unlockingItems.isEmpty() && !"Brewing".equals(recipeType);
+	}
+
+}

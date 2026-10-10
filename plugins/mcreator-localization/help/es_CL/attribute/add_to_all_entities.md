@@ -1,0 +1,1 @@
+Si está habilitado, todas las entidades en el mundo que tengan atributos van a tener este atributo presente y configurado en su valor por defecto cuando sea spawneado.

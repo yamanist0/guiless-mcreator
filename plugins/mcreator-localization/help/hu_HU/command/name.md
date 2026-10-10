@@ -1,0 +1,1 @@
+A / után írandó szó, amit a játékosnak be kell írnia a parancs meghatározásához, mint például gamemode, give, setblock, stb.

@@ -1,0 +1,12 @@
+{
+  "id": "generator-1.21.4",
+  "supportedversions": [2026001, 2026002],
+  "info": {
+    "name": "NeoForge 1.21.4 Generator",
+    "version": "1.1",
+    "description": "This plugin includes a mod, datapack and resourcepack generator for NeoForge 1.21.4",
+    "author": "_Spectrall",
+    "updateJSONURL": "https://raw.githubusercontent.com/Spectrall368/Generator-1.21.4/2026.1/update.json",
+    "pluginPageID": 120231
+  }
+}

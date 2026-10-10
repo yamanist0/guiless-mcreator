@@ -1,0 +1,269 @@
+/*
+ * MCreator (https://mcreator.net/)
+ * Copyright (C) 2012-2020, Pylo
+ * Copyright (C) 2020-2023, Pylo, opensource contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package net.mcreator.element;
+
+import com.google.gson.*;
+import net.mcreator.Launcher;
+import net.mcreator.element.converter.ConverterRegistry;
+import net.mcreator.element.converter.ConverterUtils;
+import net.mcreator.element.converter.IConverter;
+import net.mcreator.element.parts.IWorkspaceDependent;
+import net.mcreator.element.parts.procedure.RetvalProcedure;
+import net.mcreator.generator.mapping.MappableElement;
+import net.mcreator.generator.template.IAdditionalTemplateDataProvider;
+import net.mcreator.plugin.PluginLoader;
+import net.mcreator.HeadlessApplication;
+import net.mcreator.minecraft.states.StateMap;
+import net.mcreator.workspace.IWorkspaceProvider;
+import net.mcreator.workspace.Workspace;
+import net.mcreator.workspace.elements.ModElement;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.awt.image.BufferedImage;
+import java.lang.reflect.Type;
+import java.util.List;
+import java.util.stream.Collectors;
+
+public abstract class GeneratableElement {
+
+	public static final int formatVersion = 89;
+
+	private static final Logger LOG = LogManager.getLogger("Generatable Element");
+
+	private transient ModElement element;
+
+	private transient boolean conversionApplied = false;
+
+	public GeneratableElement(ModElement element) {
+		if (element != null)
+			setModElement(element);
+	}
+
+	public ModElement getModElement() {
+		return element;
+	}
+
+	public void setModElement(ModElement element) {
+		this.element = element;
+	}
+
+	/**
+	 * @return BufferedImage of mod element preview or null if default mod element icon should be used
+	 */
+	public BufferedImage generateModElementPicture() {
+		return null;
+	}
+
+	/**
+	 * This method should take care of generating additional mod
+	 * element resources for cases such as GUI mod element
+	 */
+	public void finalizeModElementGeneration() {
+	}
+
+	/**
+	 * Override this to add additional data to the element data model
+	 *
+	 * @return null if no additional data, or IAdditionalTemplateDataProvider implementation
+	 */
+	public @Nullable IAdditionalTemplateDataProvider getAdditionalTemplateData() {
+		return null;
+	}
+
+	public boolean wasConversionApplied() {
+		return conversionApplied;
+	}
+
+	public boolean isUnknown() {
+		return false;
+	}
+
+	/**
+	 * Checks if the passed type is likely part of the data model and not related to the technical part of the application.
+	 * Scanning types that do not pass this condition will most probably lead to a {@link StackOverflowError}.
+	 *
+	 * @param clazz The type that should be checked.
+	 * @return Whether it is safe to scan instances of the {@code clazz} deeper.
+	 */
+	public static boolean isDataModelObject(Class<?> clazz) {
+		return (clazz.getModule() == HeadlessApplication.class.getModule() || PluginLoader.INSTANCE.getPluginModules()
+				.contains(clazz.getModule())) && !IWorkspaceProvider.class.isAssignableFrom(clazz);
+	}
+
+	public static class GSONAdapter
+			implements JsonSerializer<GeneratableElement>, JsonDeserializer<GeneratableElement> {
+
+		private static final Gson gson;
+
+		static {
+			GsonBuilder gsonBuilder = new GsonBuilder().disableHtmlEscaping().setPrettyPrinting()
+					.setStrictness(Strictness.LENIENT);
+
+			RetvalProcedure.GSON_ADAPTERS.forEach(gsonBuilder::registerTypeAdapter);
+			gsonBuilder.registerTypeHierarchyAdapter(MappableElement.class, new MappableElement.GSONAdapter());
+			gsonBuilder.registerTypeAdapter(StateMap.class, new StateMap.GSONAdapter());
+
+			gson = gsonBuilder.create();
+		}
+
+		@Nonnull private final Workspace workspace;
+
+		public GSONAdapter(@Nonnull Workspace workspace) {
+			this.workspace = workspace;
+		}
+
+		@Override
+		public GeneratableElement deserialize(JsonElement jsonElement, Type type,
+				JsonDeserializationContext jsonDeserializationContext) throws JsonParseException {
+			ModElement lastModElement = workspace.getModElementManager().getLastElementInConversion();
+
+			final String modElementTypeString = switch (jsonElement.getAsJsonObject().get("_type").getAsString()) {
+				case "gun" -> "rangeditem";
+				case "mob" -> "livingentity";
+				default -> jsonElement.getAsJsonObject().get("_type").getAsString();
+			};
+			final int importedFormatVersion = jsonDeserializationContext.deserialize(
+					jsonElement.getAsJsonObject().get("_fv"), Integer.class);
+
+			// If GE was stored with newer FV, we can not deserialize it (we still allow this on development builds for testing purposes)
+			if (importedFormatVersion > formatVersion) {
+				if (Launcher.version.isDevelopment()) {
+					LOG.info("Mod element {} was saved in FV {} but current FV is " + GeneratableElement.formatVersion
+							+ ". Things may not work well", lastModElement.getName(), importedFormatVersion);
+				} else {
+					LOG.warn("Mod element {} was saved in FV {} but current FV is " + GeneratableElement.formatVersion
+							+ " so we can not deserialize it", lastModElement.getName(), importedFormatVersion);
+					return null;
+				}
+			}
+
+			try {
+				ModElementType<?> modElementType = ModElementTypeLoader.getModElementType(modElementTypeString);
+
+				JsonObject jsonObject = jsonElement.getAsJsonObject().get("definition").getAsJsonObject();
+				if (jsonObject.keySet().isEmpty()) {
+					LOG.warn("Mod element {} ({}) has no definition so we can not deserialize it",
+							lastModElement.getName(), modElementType);
+					return null;
+				}
+
+				GeneratableElement generatableElement = gson.fromJson(jsonObject,
+						modElementType.getModElementStorageClass());
+				generatableElement.setModElement(lastModElement); // set the mod element reference
+
+				// Populate workspace-dependant fields with workspace reference
+				IWorkspaceDependent.processWorkspaceDependentObjects(generatableElement,
+						workspaceDependent -> workspaceDependent.setWorkspace(workspace));
+
+				List<IConverter> converters = ConverterRegistry.getConvertersForModElementType(modElementType);
+				if (converters != null) {
+					List<IConverter> applicableConverters = converters.stream()
+							.filter(converter -> importedFormatVersion < converter.getVersionConvertingTo()).sorted()
+							.toList();
+					// If there are converters applicable to this mod element type, log the conversion
+					if (!applicableConverters.isEmpty()) {
+						LOG.debug("Converting {} ({}) from FV{} using: {}", lastModElement.getName(), modElementType,
+								importedFormatVersion, applicableConverters.stream()
+										.map(converter -> converter.getClass().getSimpleName() + " to FV"
+												+ converter.getVersionConvertingTo())
+										.collect(Collectors.joining(", ")));
+					}
+					for (IConverter converter : applicableConverters) {
+						try {
+							generatableElement = converter.convert(this.workspace, generatableElement, jsonElement);
+						} catch (Exception e) {
+							LOG.warn("Failed to convert mod element {} of type {} to FV{} using {}",
+									lastModElement.getName(), modElementType, converter.getVersionConvertingTo(),
+									converter.getClass().getSimpleName(), e);
+						}
+
+						if (generatableElement == null
+								|| generatableElement.getClass() != modElementType.getModElementStorageClass()) {
+							ConverterUtils.convertElementToDifferentType(converter, lastModElement, generatableElement);
+							return null;
+						} else {
+							generatableElement.conversionApplied = true;
+						}
+					}
+				}
+
+				return generatableElement;
+			} catch (IllegalArgumentException e) { // we may be dealing with mod element type no longer existing
+				IConverter converter = ConverterRegistry.getConverterForModElementType(modElementTypeString);
+				if (converter != null && importedFormatVersion < converter.getVersionConvertingTo()) {
+					try {
+						GeneratableElement result = null;
+						try {
+							result = converter.convert(this.workspace, new Unknown(lastModElement), jsonElement);
+						} catch (Exception e2) {
+							LOG.warn("Failed to convert mod element {} of type {} to FV{} using {}",
+									lastModElement.getName(), modElementTypeString, converter.getVersionConvertingTo(),
+									converter.getClass().getSimpleName(), e2);
+						}
+						ConverterUtils.convertElementToDifferentType(converter, lastModElement, result);
+					} catch (Exception e2) {
+						LOG.warn("Failed to convert mod element {} of type {} to a potential alternative.",
+								lastModElement.getName(), modElementTypeString, e2);
+					}
+				}
+
+				return null;
+			} catch (Exception e) {
+				throw new JsonParseException("Failed to deserialize mod element " + lastModElement.getName(), e);
+			}
+		}
+
+		@Override
+		public JsonElement serialize(GeneratableElement modElement, Type type,
+				JsonSerializationContext jsonSerializationContext) {
+			JsonObject root = new JsonObject();
+			root.add("_fv", new JsonPrimitive(GeneratableElement.formatVersion));
+			root.add("_type", gson.toJsonTree(modElement.getModElement().getType().getRegistryName()));
+
+			JsonObject definition = gson.toJsonTree(modElement).getAsJsonObject();
+
+			if (definition.keySet().isEmpty()) {
+				LOG.warn("Mod element {} ({}) has no definition so we can't serialize it",
+						modElement.getModElement().getName(), modElement.getModElement().getType());
+				return null;
+			}
+
+			root.add("definition", definition);
+
+			return root;
+		}
+
+	}
+
+	public static final class Unknown extends GeneratableElement {
+
+		public Unknown(ModElement element) {
+			super(element);
+		}
+
+		@Override public boolean isUnknown() {
+			return true;
+		}
+	}
+
+}

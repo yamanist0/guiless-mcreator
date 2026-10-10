@@ -1,0 +1,1 @@
+isAirAt(world, origin)

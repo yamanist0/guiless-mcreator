@@ -1,0 +1,1 @@
+Se a condição for especificada, esta imagem poderá apenas ser exibida caso a condição passe.

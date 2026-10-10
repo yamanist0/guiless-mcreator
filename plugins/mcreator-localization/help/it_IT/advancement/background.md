@@ -1,0 +1,1 @@
+Se il tuo progresso è il primo di un nuovo percorso, con questa opzione puoi scegliere uno sfondo personalizzato per la scheda.

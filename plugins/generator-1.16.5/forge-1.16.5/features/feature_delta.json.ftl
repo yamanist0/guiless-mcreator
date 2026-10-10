@@ -1,0 +1,2 @@
+<#include "mcitems.ftl">
+new BasaltDeltasFeature(${toStatetoFeatureState(input$contents)}, ${toStatetoFeatureState(input$rim)}, FeatureSpread.func_242252_a(${input$size}), FeatureSpread.func_242252_a(${input$rimSize}))

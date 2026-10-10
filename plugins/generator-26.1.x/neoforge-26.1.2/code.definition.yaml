@@ -1,0 +1,5 @@
+templates:
+  - template: code.java.ftl
+    name: "@SRCROOT/@BASEPACKAGEPATH/@NAME.java"
+  - template: code_procedure.java.ftl
+    name: "@SRCROOT/@BASEPACKAGEPATH/@NAMEProcedure.java"

@@ -1,0 +1,67 @@
+tasks.register('exportLinux64', Copy.class) {
+    dependsOn downloadJDKLinux64
+    dependsOn jar
+    dependsOn exportPlugins
+
+    def icon = project.snapshot ? "icon_eap.png" : "icon.png"
+
+    into 'build/export/linux64'
+    into('') {
+        from file('LICENSE.txt')
+        from file('platform/linux/mcreator.sh') rename('mcreator.sh', 'mcreator.shdos')
+        from file('src/main/resources/net/mcreator/ui/res/' + icon) rename(icon, 'icon.png')
+    }
+    into('lib') {
+        from 'build/libs'
+        from configurations.export
+        from configurations.linux64
+    }
+    into('plugins') { from 'build/plugins/' }
+    into('license') { from 'license' }
+    into('jdk') { from 'jdk/jbr25_linux_64' }
+    doLast {
+        convertCRLF(file('build/export/linux64/mcreator.shdos'), file('build/export/linux64/mcreator.sh'))
+        delete 'build/export/linux64/mcreator.shdos'
+    }
+}
+
+tasks.register('tarLinux64', Tar.class) {
+    dependsOn exportLinux64
+
+    def execPermissions = {
+        filePermissions {
+            user { read = true; write = true; execute = true }
+            group { read = true; execute = true }
+            other { read = true; execute = true }
+        }
+    }
+
+    into('MCreator' + (String) project.mcreatorconf.getProperty('mcreator').replace(".", "").replace(" ", "")) {
+        from('build/export/linux64/') {
+            exclude "mcreator.sh", "jdk/bin*", "jdk/lib/jspawnhelper", "jdk/lib/jexec", "jdk/lib/jcef_helper", "jdk/lib/cef_server"
+        }
+        from('build/export/linux64/mcreator.sh', execPermissions)
+        from('build/export/linux64/jdk/bin/', execPermissions) into 'jdk/bin/'
+        from('build/export/linux64/jdk/lib/jspawnhelper', execPermissions) into 'jdk/lib/'
+        from('build/export/linux64/jdk/lib/jexec', execPermissions) into 'jdk/lib/'
+        from('build/export/linux64/jdk/lib/jcef_helper', execPermissions) into 'jdk/lib/'
+        from('build/export/linux64/jdk/lib/cef_server', execPermissions) into 'jdk/lib/'
+    }
+
+    destinationDirectory = file('build/export/')
+    compression = Compression.GZIP
+    archiveFileName = 'MCreator ' + (String) project.mcreatorconf.getProperty('mcreator') + ' Linux 64bit.tar.gz'
+}
+
+tasks.register('exportLinux') {
+    group = 'export'
+    dependsOn tarLinux64
+
+    doLast {
+        delete 'build/export/linux64'
+    }
+}
+
+static void convertCRLF(File input, File out) {
+    out << input.text.replaceAll('\r\n', '\n')
+}

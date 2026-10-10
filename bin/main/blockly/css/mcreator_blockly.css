@@ -1,0 +1,100 @@
+::-webkit-scrollbar {
+    width: 7px;
+}
+
+.blocklyScrollbarBackground {
+    opacity: 255;
+    fill: transparent;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif, Apple Color Emoji, Segoe UI Emoji, Segoe UI Symbol;
+}
+
+.whlab > .blocklyFlyoutLabelText {
+    font-size: 14px;
+}
+
+.blocklyTreeLabel {
+    font-size: 13px;
+}
+
+.blocklyToolboxCategory {
+    line-height: 16px;
+}
+
+.blocklyToolboxCategoryLabel {
+    font-size: 13px;
+    font-family: inherit;
+}
+
+.blocklyTreeRow {
+    line-height: 1 !important;
+}
+
+#blockly {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+}
+
+.blocklyMainBackground {
+    stroke-width: 0;
+}
+
+.blocklyFlyoutBackground {
+    fill-opacity: 0;
+}
+
+.blocklyScrollbarVertical .blocklyScrollbarHandle {
+    rx: 2px;
+    ry: 2px;
+    width: 6px;
+}
+
+.blocklyScrollbarHorizontal .blocklyScrollbarHandle {
+    rx: 2px;
+    ry: 2px;
+    height: 6px;
+}
+
+.blocklySelected > .blocklyPath {
+    stroke-width: 2px;
+}
+
+.small-text {
+    font-size: 12px !important;
+}
+
+.blocklyWidgetDiv .blocklyMenu {
+    border-radius: 0;
+}
+
+.condition-label {
+    font-size: 13px !important;
+}
+
+.blocklyDropDownContent {
+    position: relative;
+}
+
+body.transparent {
+    background: transparent !important;
+}
+
+body.transparent #blockly {
+    background: transparent !important;
+}
+
+body.transparent .blocklySvg {
+    background-color: transparent !important;
+}
+
+body.transparent .blocklyMainBackground {
+    fill: transparent !important;
+}

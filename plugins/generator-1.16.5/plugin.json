@@ -1,0 +1,13 @@
+{
+  "id": "generator-1.16.5",
+  "supportedversions": [2026001, 2026002],
+  "weight": 11,
+  "info": {
+    "name": "Forge 1.16.5 Generator",
+    "version": "4.5",
+    "description": "This plugin includes a mod, datapack and resourcepack generator for Forge 1.16.5",
+    "author": "_Spectrall",
+    "updateJSONURL": "https://raw.githubusercontent.com/Spectrall368/Generator-1.16.5/2026.1/update.json",
+    "pluginPageID": 96320
+  }
+}

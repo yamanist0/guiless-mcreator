@@ -1,0 +1,20 @@
+<#assign mixins = []>
+<#if w.getGElementsOfType("block")?filter(e -> e.isSign())?size != 0>
+	<#assign mixins = mixins + ['BlockEntityTypeAccessor']>
+</#if>
+
+{
+  "required": true,
+  "package": "${package}.mixin",
+  "compatibilityLevel": "JAVA_8",
+  "refmap": "${modid}.refmap.json",
+  "mixins": [
+	<#list mixins as mixin>"${mixin}"<#sep>,</#list>
+  ],
+  "client": [
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "minVersion": "0.8.4"
+}

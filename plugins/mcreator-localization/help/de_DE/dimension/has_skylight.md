@@ -1,0 +1,1 @@
+Dieser Parameter lässt die Dimension Tageslicht haben

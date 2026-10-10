@@ -1,0 +1,13 @@
+<#-- @formatter:off -->
+<#include "../mcitems_json.ftl">
+{
+    "type": "minecraft:smelting",
+    <#if data.group?has_content>"group": "${data.group}",</#if>
+    "experience": ${data.xpReward},
+	"cookingtime": ${data.cookingTime},
+    "ingredient": {
+      ${mappedMCItemToItemObjectJSON(data.smeltingInputStack)}
+    },
+    "result": "${mappedMCItemToRegistryName(data.smeltingReturnStack)}"
+}
+<#-- @formatter:on -->

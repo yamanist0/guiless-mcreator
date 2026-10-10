@@ -1,0 +1,59 @@
+{
+  "args0": [
+    {
+      "type": "input_value",
+      "name": "text",
+      "check": "String"
+    },
+    {
+      "type": "field_color_selector",
+      "name": "color"
+    },
+    {
+      "type": "field_checkbox",
+      "name": "bold",
+      "checked": false
+    },
+    {
+      "type": "field_checkbox",
+      "name": "italic",
+      "checked": false
+    },
+    {
+      "type": "field_checkbox",
+      "name": "underlined",
+      "checked": false
+    },
+    {
+      "type": "field_image",
+      "src": "./res/server.png",
+      "width": 8,
+      "height": 24
+    }
+  ],
+  "inputsInline": true,
+  "previousStatement": null,
+  "nextStatement": null,
+  "colour": 35,
+  "mcreator": {
+    "toolbox_id": "worldmanagement",
+    "toolbox_init": [
+      "<value name=\"text\"><block type=\"text\"><field name=\"TEXT\">Message</field></block></value>"
+    ],
+    "inputs": [
+      "text"
+    ],
+    "fields": [
+      "color",
+      "bold",
+      "italic",
+      "underlined"
+    ],
+    "dependencies": [
+      {
+        "name": "world",
+        "type": "world"
+      }
+    ]
+  }
+}

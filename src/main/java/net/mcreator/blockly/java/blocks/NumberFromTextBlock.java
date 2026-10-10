@@ -1,0 +1,88 @@
+/*
+ * MCreator (https://mcreator.net/)
+ * Copyright (C) 2020 Pylo and contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package net.mcreator.blockly.java.blocks;
+
+import net.mcreator.blockly.BlocklyCompileNote;
+import net.mcreator.blockly.BlocklyToCode;
+import net.mcreator.blockly.IBlockGenerator;
+import net.mcreator.generator.template.TemplateGeneratorException;
+import net.mcreator.init.L10N;
+import net.mcreator.util.XMLUtil;
+import org.w3c.dom.Element;
+
+import javax.annotation.Nullable;
+import java.util.List;
+
+public class NumberFromTextBlock implements IBlockGenerator {
+
+	@Override public void generateBlock(BlocklyToCode master, Element block) throws TemplateGeneratorException {
+		List<Element> elements = XMLUtil.getDirectChildren(block);
+		Element num = null;
+		for (Element element : elements) {
+			if (element.getNodeName().equals("value") && element.getAttribute("name").equals("NUMTEXT"))
+				num = element;
+		}
+		if (num != null) {
+			if (master.getTemplateGenerator() != null && master.getTemplateGenerator()
+					.hasTemplate("utils/_parse_double.java.ftl")) {
+				master.addTemplate("utils/_parse_double.java.ftl");
+				master.append("parseDouble(");
+				master.processOutputBlockWithoutParentheses(num);
+				master.append(")");
+			} else {
+				master.append(
+						"new Object() {double convert(String s) { try { return Double.parseDouble(s.trim()); } catch (Exception e) { } return 0; }}.convert(");
+				master.processOutputBlockWithoutParentheses(num);
+				master.append(")");
+			}
+		} else {
+			master.addCompileNote(new BlocklyCompileNote(BlocklyCompileNote.Type.ERROR,
+					L10N.t("blockly.errors.empty_text_to_number")));
+		}
+	}
+
+	@Override public String[] getSupportedBlocks() {
+		return new String[] { "math_from_text" };
+	}
+
+	@Override public BlockType getBlockType() {
+		return BlockType.OUTPUT;
+	}
+
+	@Nullable @Override public String[] getBlockJSONDefinitions() {
+		return new String[] { """
+        {
+          "type": "math_from_text",
+          "args0": [
+              {
+                  "type": "input_value",
+                  "name": "NUMTEXT",
+                  "check": "String"
+              }
+          ],
+          "output": "Number",
+          "colour": "%{BKY_MATH_HUE}"
+        }""" };
+	}
+
+	@Nullable @Override public String getToolboxCategory() {
+		return "math";
+	}
+
+}

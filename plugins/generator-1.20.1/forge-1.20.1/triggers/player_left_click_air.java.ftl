@@ -1,0 +1,49 @@
+<#include "procedures.java.ftl">
+@Mod.EventBusSubscriber(Dist.CLIENT) public class ${name}Procedure {
+	@SubscribeEvent public static void onLeftClick(PlayerInteractEvent.LeftClickEmpty event) {
+		<#assign dependenciesCode>
+			<@procedureDependenciesCode dependencies, {
+				"x": "event.getPos().getX()",
+				"y": "event.getPos().getY()",
+				"z": "event.getPos().getZ()",
+				"world": "event.getLevel()",
+				"entity": "event.getEntity()"
+			}/>
+		</#assign>
+		${JavaModName}.PACKET_HANDLER.sendToServer(new ${name}Message());
+		execute(${dependenciesCode});
+	}
+
+	@Mod.EventBusSubscriber(bus = Mod.EventBusSubscriber.Bus.MOD)
+	public static class ${name}Message {
+		public ${name}Message() {}
+
+		public ${name}Message(FriendlyByteBuf buffer) {}
+
+		public static void buffer(${name}Message message, FriendlyByteBuf buffer) {}
+
+		public static void handler(${name}Message message, Supplier<NetworkEvent.Context> contextSupplier) {
+			NetworkEvent.Context context = contextSupplier.get();
+			context.enqueueWork(() -> {
+					if (!context.getSender().level().getChunkSource().hasChunk(
+						SectionPos.blockToSectionCoord(context.getSender().getX()),
+						SectionPos.blockToSectionCoord(context.getSender().getZ())
+					)) return;
+				<#assign dependenciesCode>
+					<@procedureDependenciesCode dependencies, {
+						"x": "context.getSender().getX()",
+						"y": "context.getSender().getY()",
+						"z": "context.getSender().getZ()",
+						"world": "context.getSender().level()",
+						"entity": "context.getSender()"
+					}/>
+				</#assign>
+				execute(${dependenciesCode});
+			});
+			context.setPacketHandled(true);
+		}
+
+		@SubscribeEvent public static void registerMessage(FMLCommonSetupEvent event) {
+			${JavaModName}.addNetworkMessage(${name}Message.class, ${name}Message::buffer, ${name}Message::new, ${name}Message::handler);
+		}
+	}

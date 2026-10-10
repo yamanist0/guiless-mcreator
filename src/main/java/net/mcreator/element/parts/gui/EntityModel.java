@@ -1,0 +1,74 @@
+package net.mcreator.element.parts.gui;
+
+import net.mcreator.element.parts.procedure.Procedure;
+import net.mcreator.minecraft.RegistryNameFixer;
+import net.mcreator.workspace.Workspace;
+import net.mcreator.workspace.elements.VariableTypeLoader;
+
+import javax.annotation.Nonnull;
+import java.awt.*;
+import java.awt.image.ImageObserver;
+import java.util.Objects;
+
+public class EntityModel extends GUIComponent {
+
+	@Nonnull public Procedure entityModel;
+	public Procedure displayCondition;
+
+	public int scale;
+	public int rotationX;
+
+	public boolean followMouseMovement;
+
+	public EntityModel(int x, int y, @Nonnull Procedure entityModel, Procedure displayCondition, int scale,
+			int rotationX, boolean followMouseMovement) {
+		super(x, y);
+		this.entityModel = entityModel;
+		this.displayCondition = displayCondition;
+		this.scale = scale;
+		this.rotationX = rotationX;
+		this.followMouseMovement = followMouseMovement;
+	}
+
+	public EntityModel(int x, int y, Procedure entityModel, Procedure displayCondition, int scale, int rotationX,
+			boolean followMouseMovement, AnchorPoint anchorPoint) {
+		this(x, y, entityModel, displayCondition, scale, rotationX, followMouseMovement);
+		this.anchorPoint = anchorPoint;
+	}
+
+	@Override public String getName() {
+		return "entity_model_" + RegistryNameFixer.fromCamelCase(Objects.requireNonNull(this.entityModel.getName()));
+	}
+
+	@Override public void paintComponent(int cx, int cy, ImageObserver observer, Graphics2D g) {
+		g.setColor(Color.darkGray);
+
+		g.drawLine(cx, cy + 20, cx + 20, cy + 20);
+
+		Stroke original = g.getStroke();
+		g.setStroke(new BasicStroke(1, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 0, new float[] { 1 }, 0));
+		g.drawLine(cx + 10, cy, cx + 10, cy + 20);
+		g.setStroke(original);
+
+		g.setColor(VariableTypeLoader.BuiltInTypes.ENTITY.getBlocklyColor());
+
+		g.fillRect(cx + 9, cy + 19, 2, 2);
+
+		g.setFont(g.getFont().deriveFont(5f));
+		int textwidth = (int) (g.getFont().getStringBounds(this.entityModel.getName(), g.getFontRenderContext()).getWidth());
+		g.drawString(this.entityModel.getName(), cx + 10 - textwidth / 2, cy + 17);
+	}
+
+	@Override public int getWidth(Workspace workspace) {
+		return 20;
+	}
+
+	@Override public int getHeight(Workspace workspace) {
+		return 20;
+	}
+
+	@Override public int getWeight() {
+		return -10;
+	}
+
+}

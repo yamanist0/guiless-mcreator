@@ -1,0 +1,299 @@
+/*
+ * MCreator (https://mcreator.net/)
+ * Copyright (C) 2020 Pylo and contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package net.mcreator.workspace.misc;
+
+import net.mcreator.element.BaseType;
+import net.mcreator.element.GeneratableElement;
+import net.mcreator.element.ModElementType;
+import net.mcreator.element.ModElementTypeLoader;
+import net.mcreator.element.parts.MItemBlock;
+import net.mcreator.element.parts.TabEntry;
+import net.mcreator.element.parts.TextureHolder;
+import net.mcreator.element.types.interfaces.IItemWithTexture;
+import net.mcreator.element.types.interfaces.IMultipleNames;
+import net.mcreator.element.types.interfaces.ITabContainedElement;
+import net.mcreator.generator.GeneratorWrapper;
+import net.mcreator.generator.mapping.MappableElement;
+import net.mcreator.generator.mapping.NameMapper;
+import net.mcreator.generator.mapping.NonMappableElement;
+import net.mcreator.generator.mapping.UniquelyMappedElement;
+import net.mcreator.minecraft.MCItem;
+import net.mcreator.util.TraceUtil;
+import net.mcreator.workspace.Workspace;
+import net.mcreator.workspace.elements.ModElement;
+import net.mcreator.workspace.elements.TagElement;
+import net.mcreator.workspace.elements.VariableType;
+import net.mcreator.workspace.resources.Model;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+
+@SuppressWarnings("unused") public record WorkspaceInfo(Workspace workspace) {
+
+	private static final Logger LOG = LogManager.getLogger("Workspace info");
+
+	public Collection<ModElement> getElementsOfType(String typeString) {
+		try {
+			ModElementType<?> type = ModElementTypeLoader.getModElementType(typeString);
+			return workspace.getModElementsByType(type);
+		} catch (IllegalArgumentException e) {
+			LOG.warn("Failed to list elements of non-existent type", e);
+			return Collections.emptyList();
+		}
+	}
+
+	public List<GeneratableElement> getGElementsOfType(String typeString) {
+		try {
+			ModElementType<?> type = ModElementTypeLoader.getModElementType(typeString);
+			// getGeneratableElement is not thread safe, so we can't use parallelStream here
+			return workspace.getModElementsByType(type).stream().map(ModElement::getGeneratableElement)
+					.filter(Objects::nonNull).toList();
+		} catch (IllegalArgumentException e) {
+			LOG.warn("Failed to list elements of non-existent type", e);
+			return Collections.emptyList();
+		}
+	}
+
+	public boolean hasElementsOfBaseType(String baseTypeString) {
+		BaseType baseType = BaseType.valueOf(baseTypeString.toUpperCase(Locale.ENGLISH));
+		for (ModElement modElement : workspace.getModElements()) {
+			// getBaseTypesProvided is not thread safe, so we can't use parallelStream here
+			if (modElement.getBaseTypesProvided().contains(baseType))
+				return true;
+		}
+		return false;
+	}
+
+	public boolean hasElementsOfType(String typeString) {
+		try {
+			ModElementType<?> type = ModElementTypeLoader.getModElementType(typeString);
+			return workspace.containsType(type);
+		} catch (IllegalArgumentException e) {
+			return false;
+		}
+	}
+
+	public boolean hasVariablesOfScope(String type) {
+		return workspace.getVariableElements().stream().anyMatch(e -> e.getScope() == VariableType.Scope.valueOf(type));
+	}
+
+	public boolean hasVariables() {
+		return !workspace.getVariableElements().isEmpty();
+	}
+
+	public boolean hasSounds() {
+		return !workspace.getSoundElements().isEmpty();
+	}
+
+	public boolean hasJavaModels() {
+		return Model.getModels(workspace).stream().anyMatch(model -> model.getType() == Model.Type.JAVA);
+	}
+
+	public List<String> getUsedElementNames(ModElement... exclusions) {
+		List<ModElement> exclusionList = exclusions.length > 0 ? Arrays.asList(exclusions) : null;
+
+		List<String> usedNames = new ArrayList<>();
+
+		for (ModElement element : workspace.getModElements()) {
+			if (exclusionList != null && exclusionList.contains(element))
+				continue;
+
+			usedNames.add(element.getName());
+
+			// Only load relevant GEs
+			if (!IMultipleNames.class.isAssignableFrom(element.getType().getModElementStorageClass()))
+				continue;
+
+			GeneratableElement gen = element.getGeneratableElement();
+			if (gen instanceof IMultipleNames multipleNames) {
+				usedNames.addAll(multipleNames.getAdditionalNames());
+			}
+		}
+		return usedNames;
+	}
+
+	public Map<String, TextureHolder> getItemTextureMap() {
+		Map<String, TextureHolder> textureMap = new HashMap<>();
+		for (ModElement element : workspace.getModElements()) {
+			if (element.getGeneratableElement() instanceof IItemWithTexture itemWithTexture) {
+				textureMap.put(element.getRegistryName(), itemWithTexture.getTexture());
+			}
+		}
+		return textureMap;
+	}
+
+	public boolean hasItemsInTabs() {
+		List<GeneratableElement> elementsList = workspace.getModElements().stream()
+				.map(ModElement::getGeneratableElement).filter(Objects::nonNull).toList();
+
+		for (GeneratableElement element : elementsList) {
+			if (element instanceof ITabContainedElement tabElement) {
+				if (!tabElement.getCreativeTabs().isEmpty() && !tabElement.getCreativeTabItems().isEmpty()) {
+					return true;
+				}
+			}
+		}
+
+		return false;
+	}
+
+	public Map<String, List<MItemBlock>> getCreativeTabMap() {
+		List<GeneratableElement> elementsList = workspace.getModElements().stream()
+				.map(ModElement::getGeneratableElement).toList();
+
+		Map<String, List<MItemBlock>> tabMap = new LinkedHashMap<>(), customTabsWithoutOrder = new LinkedHashMap<>();
+
+		// Can't use parallelStream here because getCreativeTabItems
+		// call MCItem.Custom::new that calls getBlockIconBasedOnName which calls
+		// ModElement#getGeneratableElement that is not thread safe
+		for (GeneratableElement element : elementsList) {
+			if (element instanceof ITabContainedElement tabElement) {
+				List<MItemBlock> tabItems = tabElement.getCreativeTabItems().stream()
+						.map(e -> new MItemBlock(workspace, e.getName())).toList();
+				if (!tabItems.isEmpty()) {
+					for (TabEntry tabEntry : tabElement.getCreativeTabs()) {
+						String tab = tabEntry.getUnmappedValue();
+
+						// If tab does not have custom order, add items to the end of appropriate list
+						if (workspace.getCreativeTabsOrder().get(tab) == null) {
+							(tab.startsWith(NameMapper.MCREATOR_PREFIX) ?
+									customTabsWithoutOrder :
+									tabMap).computeIfAbsent(tab, key -> new ArrayList<>()).addAll(tabItems);
+						}
+					}
+				}
+			}
+		}
+
+		// Next, we add items to tabs with custom order
+		for (Map.Entry<String, ArrayList<String>> entry : workspace.getCreativeTabsOrder().entrySet()) {
+			String tab = entry.getKey();
+			if (tab.startsWith(NameMapper.MCREATOR_PREFIX)) {
+				ModElement tabME = workspace.getModElementByName(tab.replace(NameMapper.MCREATOR_PREFIX, ""));
+				if (tabME == null || tabME.getType() != ModElementType.TAB)
+					continue; // Might be a stale entry we didn't remove previously (#5174)
+			}
+			for (String element : entry.getValue()) {
+				ModElement me = workspace.getModElementByName(element);
+				if (me != null && me.getGeneratableElement() instanceof ITabContainedElement tabElement) {
+					List<MCItem> tabItems = tabElement.getCreativeTabItems();
+					if (tabItems != null && !tabItems.isEmpty()) {
+						tabMap.computeIfAbsent(tab, key -> new ArrayList<>())
+								.addAll(tabItems.stream().map(e -> new MItemBlock(workspace, e.getName())).toList());
+					}
+				}
+			}
+		}
+
+		// Last, we move custom tabs to the end of the main list
+		// Is not strictly necessary, but this makes sure order of keys in tabMap is consistent with the editor UI
+		for (Map.Entry<String, List<MItemBlock>> entry : tabMap.entrySet().stream().toList()) {
+			if (entry.getKey().startsWith(NameMapper.MCREATOR_PREFIX)) {
+				tabMap.remove(entry.getKey());
+				tabMap.put(entry.getKey(), entry.getValue());
+			}
+		}
+
+		// Add tabs without order to the end of the main list
+		tabMap.putAll(customTabsWithoutOrder);
+
+		tabMap.entrySet().removeIf(entry -> {
+			if (entry.getKey().startsWith(NameMapper.MCREATOR_PREFIX) && !workspace.containsModElement(
+					GeneratorWrapper.getElementPlainName(entry.getKey()))) {
+				LOG.warn("Broken creative tab reference found. Referencing non-existent custom tab: {}",
+						entry.getKey().replaceFirst(NameMapper.MCREATOR_PREFIX, ""));
+				return true;
+			}
+			return false;
+		});
+
+		return tabMap;
+	}
+
+	public boolean hasModElement(String elementName) {
+		return workspace.containsModElement(GeneratorWrapper.getElementPlainName(elementName));
+	}
+
+	public <T extends MappableElement> Set<MappableElement> filterBrokenReferences(Collection<T> input) {
+		if (input == null)
+			return Collections.emptySet();
+
+		Set<MappableElement> retval = new LinkedHashSet<>();
+		for (T t : input) {
+			if (t instanceof NonMappableElement) {
+				retval.add(t);
+			} else if (t.getUnmappedValue().startsWith(NameMapper.MCREATOR_PREFIX)) {
+				if (workspace.containsModElement(GeneratorWrapper.getElementPlainName(t.getUnmappedValue()))) {
+					retval.add(new UniquelyMappedElement(t));
+				} else {
+					LOG.warn("({}) Broken reference found. Referencing non-existent element: {}",
+							TraceUtil.tryToFindMCreatorInvoker(),
+							t.getUnmappedValue().replaceFirst(NameMapper.MCREATOR_PREFIX, ""));
+				}
+			} else {
+				retval.add(new UniquelyMappedElement(t));
+			}
+		}
+		return retval;
+	}
+
+	/**
+	 * Returns a set of mappable elements that do not trigger circular dependency to tag
+	 *
+	 * @param tag          Tag name with namespace to check. A plain name without # or TAG: prefix is required.
+	 * @param mappingTable Mapping table to use for getting mapped values of the elements
+	 * @param elements     Collection of elements to normalize/filter
+	 * @param <T>          Type of elements
+	 * @return Set of elements that do not trigger circular dependency to tag
+	 */
+	public <T extends MappableElement> Set<MappableElement> normalizeTagElements(String tag, int mappingTable,
+			Collection<T> elements) {
+		tag = TagElement.normalizeTag("#" + tag);
+		Set<MappableElement> filtered = filterBrokenReferences(elements);
+
+		Set<MappableElement> retval = new LinkedHashSet<>();
+		for (MappableElement element : filtered) {
+			if (!tag.equals(TagElement.normalizeTag(element.getMappedValue(mappingTable)))) {
+				retval.add(element);
+			}
+		}
+		return retval;
+	}
+
+	public String getUUID(String offset) {
+		return UUID.nameUUIDFromBytes(
+				(offset + workspace.getWorkspaceSettings().getModID()).getBytes(StandardCharsets.UTF_8)).toString();
+	}
+
+	public String getUUID() {
+		return UUID.nameUUIDFromBytes(workspace.getWorkspaceSettings().getModID().getBytes(StandardCharsets.UTF_8))
+				.toString();
+	}
+
+	public MItemBlock itemBlock(String itemBlock) {
+		return new MItemBlock(workspace, itemBlock);
+	}
+
+	public Workspace getWorkspace() {
+		return workspace;
+	}
+
+}

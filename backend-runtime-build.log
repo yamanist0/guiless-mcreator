@@ -1,0 +1,25 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.6.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+Directory 'C:\Users\yaman\Desktop\ModStudio AI\MCreator-master\jdk\jbr25_linux_64' (Gradle property 'org.gradle.java.installations.paths') used for java installations does not exist
+Directory 'C:\Users\yaman\Desktop\ModStudio AI\MCreator-master\jdk\jbr25_mac_aarch64\Contents\Home' (Gradle property 'org.gradle.java.installations.paths') used for java installations does not exist
+Directory 'C:\Users\yaman\Desktop\ModStudio AI\MCreator-master\jdk\jbr25_mac_x64\Contents\Home' (Gradle property 'org.gradle.java.installations.paths') used for java installations does not exist
+> Task :compileJava UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :jar UP-TO-DATE
+> Task :cleanupPlugins
+> Task :export_plugin_generator-1211
+> Task :export_plugin_generator-261x
+> Task :export_plugin_generator-addon-261x
+> Task :export_plugin_mcreator-core
+> Task :export_plugin_mcreator-link
+> Task :export_plugin_mcreator-localization
+> Task :export_plugin_mcreator-themes
+> Task :exportPlugins
+
+> Task :writeRuntimeClasspath
+Wrote classpath (49 entries) to C:\Users\yaman\Desktop\ModStudio AI\MCreator-master\build\mcreator-classpath.txt
+
+BUILD SUCCESSFUL in 20s
+12 actionable tasks: 9 executed, 3 up-to-date
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.6.0/userguide/configuration_cache_enabling.html

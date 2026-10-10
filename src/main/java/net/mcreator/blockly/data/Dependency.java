@@ -1,0 +1,176 @@
+/*
+ * MCreator (https://mcreator.net/)
+ * Copyright (C) 2020 Pylo and contributors
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+package net.mcreator.blockly.data;
+
+import net.mcreator.generator.mapping.NameMapper;
+import net.mcreator.blockly.BlocklyEditorType;
+import net.mcreator.init.L10N;
+import net.mcreator.workspace.Workspace;
+import net.mcreator.workspace.elements.VariableType;
+import net.mcreator.workspace.elements.VariableTypeLoader;
+
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import java.awt.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public record Dependency(String name, String type) implements Comparable<Dependency> {
+
+	@Override public int compareTo(Dependency o) {
+		return (type + ":" + name).compareTo(o.type + ":" + o.name);
+	}
+
+	@Override public boolean equals(Object o) {
+		if (o instanceof Dependency)
+			return ((Dependency) o).name.equals(name);
+		return false;
+	}
+
+	@Override public int hashCode() {
+		return name.hashCode();
+	}
+
+	@Nonnull @Override public String toString() {
+		return L10N.t("common.dependency", name, type);
+	}
+
+	// For backward compatibility with FTL templates before this class was changed to a record
+	public String getName() {
+		return name;
+	}
+
+	public String getType(Workspace workspace) {
+		return new NameMapper(workspace, "types").getMapping(type);
+	}
+
+	public String getRawType() {
+		return type;
+	}
+
+	public String getBlocklyType() {
+		VariableType varType = VariableTypeLoader.INSTANCE.fromName(type);
+		return varType != null ? varType.getBlocklyVariableType() : "";
+	}
+
+	public Color getColor() {
+		return getColor(type);
+	}
+
+	@Nullable public String getDependencyBlockXml(BlocklyEditorType editorType) {
+		if (editorType == BlocklyEditorType.PROCEDURE) {
+			StringBuilder blockXml = new StringBuilder("<xml xmlns=\"http://www.w3.org/1999/xhtml\">");
+			switch (name) {
+			case "x" -> blockXml.append("<block type=\"coord_x\"></block>");
+			case "y" -> blockXml.append("<block type=\"coord_y\"></block>");
+			case "z" -> blockXml.append("<block type=\"coord_z\"></block>");
+			case "entity" -> blockXml.append("<block type=\"entity_from_deps\"></block>");
+			case "sourceentity" -> blockXml.append("<block type=\"source_entity_from_deps\"></block>");
+			case "immediatesourceentity" ->
+					blockXml.append("<block type=\"immediate_source_entity_from_deps\"></block>");
+			case "direction" -> blockXml.append("<block type=\"direction_from_deps\"></block>");
+			case "itemstack" -> blockXml.append("<block type=\"itemstack_to_mcitem\"></block>");
+			case "blockstate" -> blockXml.append("<block type=\"blockstate_from_deps\"></block>");
+			case "damagesource" -> blockXml.append("<block type=\"damagesource_from_deps\"></block>");
+			default -> {
+				if (VariableTypeLoader.INSTANCE.fromName(type) != null) {
+					blockXml.append("<block type=\"custom_dependency_");
+					blockXml.append(type);
+					blockXml.append("\"><field name=\"NAME\">");
+					blockXml.append(name);
+					blockXml.append("</field></block>");
+				} else
+					return null;
+			}
+			}
+			blockXml.append("</xml>");
+			return blockXml.toString();
+		} else if (editorType == BlocklyEditorType.SCRIPT) {
+			StringBuilder blockXml = new StringBuilder("<xml xmlns=\"http://www.w3.org/1999/xhtml\">");
+			switch (name) {
+			case "x" -> blockXml.append("<block type=\"coord_x\"></block>");
+			case "y" -> blockXml.append("<block type=\"coord_y\"></block>");
+			case "z" -> blockXml.append("<block type=\"coord_z\"></block>");
+			case "entity" -> blockXml.append("<block type=\"entity_from_deps\"></block>");
+			case "sourceentity" -> blockXml.append("<block type=\"source_entity_from_deps\"></block>");
+			case "itemstack" -> blockXml.append("<block type=\"be_itemstack_dep\"></block>");
+			case "block" -> blockXml.append("<block type=\"be_blockstate_dep\"></block>");
+			default -> {
+				if (VariableTypeLoader.INSTANCE.fromName(type) != null) {
+					blockXml.append("<block type=\"custom_dependency_");
+					blockXml.append(type);
+					blockXml.append("\"><field name=\"NAME\">");
+					blockXml.append(name);
+					blockXml.append("</field></block>");
+				} else
+					return null;
+			}
+			}
+			blockXml.append("</xml>");
+			return blockXml.toString();
+		} else {
+			return null;
+		}
+	}
+
+	public static Color getColor(String type) {
+		// Check if the type is a loaded variable and then, get its HUE color
+		if (VariableTypeLoader.INSTANCE.fromName(type) != null) {
+			return VariableTypeLoader.INSTANCE.fromName(type).getBlocklyColor();
+		}
+
+		// Return a color for other dependency types
+		return switch (type) {
+			case "world" -> new Color(0x998160);
+			case "entity" -> new Color(0x608a99);
+			case "map" -> new Color(0x8FD980);
+			case "advancement" -> new Color(0x68712E);
+			case "dimensiontype" -> new Color(0x609963);
+			case "cmdcontext" -> new Color(0x8C5BA5);
+			case "damagesource" -> new Color(0x996086);
+			case "enchantment" -> new Color(0x486E46);
+			default -> Color.white;
+		};
+	}
+
+	public static Dependency[] fromString(String input) {
+		List<Dependency> retval = new ArrayList<>();
+		String[] deps = input.split("/");
+		for (String dep : deps) {
+			String[] depdata = dep.split(":");
+			retval.add(new Dependency(depdata[0], depdata[1]));
+		}
+		return retval.toArray(new Dependency[0]);
+	}
+
+	public static class BlocklyDependency {
+
+		public final String name;
+		public final String readableName;
+		public final String blocklyType;
+
+		public BlocklyDependency(Dependency dependency) {
+			this.name = dependency.name;
+			this.readableName = dependency.toString();
+			this.blocklyType = dependency.getBlocklyType();
+		}
+
+	}
+
+}
