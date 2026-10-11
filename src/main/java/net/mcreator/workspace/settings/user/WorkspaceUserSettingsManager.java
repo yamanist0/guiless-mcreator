@@ -58,6 +58,7 @@ public class WorkspaceUserSettingsManager implements Closeable {
 	}
 
 	public WorkspaceUserSettings getUserSettings() {
+		System.out.println("getUserSettings called: " + userSettings);
 		return userSettings;
 	}
 
