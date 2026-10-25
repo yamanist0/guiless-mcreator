@@ -60,6 +60,7 @@ public class BlocklyBlockCodeGenerator {
 	}
 
 	public BlocklyBlockCodeGenerator setTemplateExtension(String templateExtension) {
+		// store the template extension
 		this.templateExtension = templateExtension;
 		return this;
 	}
