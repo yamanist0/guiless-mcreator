@@ -37,6 +37,7 @@ public class EncryptUtils {
 		return new String(c.doFinal(Base64.getMimeDecoder().decode(encryptedData.getBytes())));
 	}
 
+	// generates the secret key for aes algorithm
 	private static Key generateKey() {
 		return new SecretKeySpec(new byte[] { 45, 56, 3, -30, 30, 124, -100, 63, 42, 103, 1, 45, -87, -1, 45, 99 },
 				"AES");
