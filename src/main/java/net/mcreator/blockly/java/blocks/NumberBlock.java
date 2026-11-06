@@ -45,6 +45,7 @@ public class NumberBlock implements IBlockGenerator {
 		}
 	}
 
+	// Returns the block types that this code supports
 	@Override public String[] getSupportedBlocks() {
 		return new String[] { "math_number" };
 	}
