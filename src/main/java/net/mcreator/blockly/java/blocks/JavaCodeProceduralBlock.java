@@ -31,6 +31,7 @@ public class JavaCodeProceduralBlock implements IBlockGenerator {
 
 	@Override public void generateBlock(BlocklyToCode master, Element block) {
 		Element element = XMLUtil.getFirstChildrenWithName(block, "field");
+		System.out.println("Debug: field element is " + element);
 		if (element != null) {
 			master.append(element.getTextContent().replace("&#10;", "\n")).append("\n");
 		} else {
